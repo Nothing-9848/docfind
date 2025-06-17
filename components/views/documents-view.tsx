@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import type React from "react"
+
+import { useState, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +24,8 @@ import {
   ImageIcon,
   File,
   Loader2,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DocumentStore } from "../../store/document-store"
@@ -38,9 +42,14 @@ export function DocumentsView({ state }: DocumentsViewProps) {
   const [selectedFolder, setSelectedFolder] = useState<string>("all")
   const [selectedTag, setSelectedTag] = useState<string>("all")
   const [showUpload, setShowUpload] = useState(false)
-  const [uploadFiles, setUploadFiles] = useState<File[]>([])
-  const [processingFiles, setProcessingFiles] = useState<Map<string, number>>(new Map())
+  const [processingFiles, setProcessingFiles] = useState<Map<string, { progress: number; status: string }>>(new Map())
   const [newTags, setNewTags] = useState<string>("")
+  const [dragActive, setDragActive] = useState(false)
+
+  // Initialize OCR service on component mount
+  useEffect(() => {
+    OCRService.initialize().catch(console.error)
+  }, [])
 
   const filteredDocuments = state.documents.filter((doc) => {
     const matchesSearch =
@@ -56,22 +65,73 @@ export function DocumentsView({ state }: DocumentsViewProps) {
       if (!files) return
 
       const fileArray = Array.from(files)
-      setUploadFiles(fileArray)
 
-      for (const file of fileArray) {
-        const fileId = `${file.name}-${Date.now()}`
-        setProcessingFiles((prev) => new Map(prev.set(fileId, 0)))
+      // Validate file types and sizes
+      const validFiles = fileArray.filter((file) => {
+        const validTypes = [
+          "image/png",
+          "image/jpeg",
+          "image/jpg",
+          "image/gif",
+          "application/pdf",
+          "text/plain",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ]
+        const maxSize = 10 * 1024 * 1024 // 10MB
+
+        if (!validTypes.includes(file.type)) {
+          alert(`File ${file.name} is not a supported format`)
+          return false
+        }
+
+        if (file.size > maxSize) {
+          alert(`File ${file.name} is too large (max 10MB)`)
+          return false
+        }
+
+        return true
+      })
+
+      if (validFiles.length === 0) return
+
+      for (const file of validFiles) {
+        const fileId = `${file.name}-${Date.now()}-${Math.random()}`
+
+        // Initialize processing state
+        setProcessingFiles((prev) => new Map(prev.set(fileId, { progress: 0, status: "Starting OCR..." })))
 
         try {
+          // Process OCR with progress updates
           const ocrText = await OCRService.extractText(file, (progress) => {
-            setProcessingFiles((prev) => new Map(prev.set(fileId, progress)))
+            setProcessingFiles(
+              (prev) =>
+                new Map(
+                  prev.set(fileId, {
+                    progress,
+                    status: progress < 100 ? `Processing OCR... ${progress}%` : "Finalizing...",
+                  }),
+                ),
+            )
           })
 
+          // Parse tags
           const tags = newTags
             .split(",")
             .map((tag) => tag.trim())
             .filter(Boolean)
 
+          // Auto-generate additional tags based on file type and content
+          const autoTags = []
+          if (file.type.startsWith("image/")) autoTags.push("image")
+          if (file.type === "application/pdf") autoTags.push("pdf")
+          if (file.name.toLowerCase().includes("invoice")) autoTags.push("invoice", "finance")
+          if (file.name.toLowerCase().includes("contract")) autoTags.push("contract", "legal")
+          if (file.name.toLowerCase().includes("report")) autoTags.push("report", "analysis")
+
+          const allTags = [...new Set([...tags, ...autoTags, "uploaded", new Date().getFullYear().toString()])]
+
+          // Create document
           const newDoc = {
             name: file.name.replace(/\.[^/.]+$/, ""),
             originalName: file.name,
@@ -85,32 +145,68 @@ export function DocumentsView({ state }: DocumentsViewProps) {
             size: file.size,
             content: `Uploaded file: ${file.name}`,
             ocrText,
-            tags: [...tags, "uploaded", new Date().getFullYear().toString()],
-            folderId: selectedFolder || null,
+            tags: allTags,
+            folderId: selectedFolder === "all" ? null : selectedFolder,
             isProcessing: false,
             processingProgress: 100,
           }
 
+          // Update processing status to completed
+          setProcessingFiles((prev) => new Map(prev.set(fileId, { progress: 100, status: "Completed!" })))
+
+          // Add document to store
           DocumentStore.addDocument(newDoc)
-          setProcessingFiles((prev) => {
-            const newMap = new Map(prev)
-            newMap.delete(fileId)
-            return newMap
-          })
+
+          // Remove from processing after a short delay
+          setTimeout(() => {
+            setProcessingFiles((prev) => {
+              const newMap = new Map(prev)
+              newMap.delete(fileId)
+              return newMap
+            })
+          }, 2000)
         } catch (error) {
           console.error("Failed to process file:", error)
-          setProcessingFiles((prev) => {
-            const newMap = new Map(prev)
-            newMap.delete(fileId)
-            return newMap
-          })
+          setProcessingFiles((prev) => new Map(prev.set(fileId, { progress: 0, status: "Failed to process" })))
+
+          // Remove failed processing after delay
+          setTimeout(() => {
+            setProcessingFiles((prev) => {
+              const newMap = new Map(prev)
+              newMap.delete(fileId)
+              return newMap
+            })
+          }, 3000)
         }
       }
 
-      setUploadFiles([])
       setNewTags("")
     },
     [selectedFolder, newTags],
+  )
+
+  // Handle drag and drop
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragActive(false)
+
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFileUpload(e.dataTransfer.files)
+      }
+    },
+    [handleFileUpload],
   )
 
   const getFileIcon = (doc: Document) => {
@@ -163,7 +259,7 @@ export function DocumentsView({ state }: DocumentsViewProps) {
                         <SelectValue placeholder="Select folder (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Folders</SelectItem>
+                        <SelectItem value="all">Root Folder</SelectItem>
                         {state.folders
                           .filter((f) => f.id !== "root")
                           .map((folder) => (
@@ -185,9 +281,19 @@ export function DocumentsView({ state }: DocumentsViewProps) {
                   </div>
                 </div>
 
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <div
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                    dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                >
                   <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-gray-900 mb-2">Drop files here or click to upload</p>
+                  <p className="text-lg font-medium text-gray-900 mb-2">
+                    {dragActive ? "Drop files here!" : "Drop files here or click to upload"}
+                  </p>
                   <p className="text-sm text-gray-500 mb-4">Supports PDF, DOC, DOCX, PNG, JPG, GIF (Max 10MB each)</p>
                   <input
                     type="file"
@@ -205,18 +311,43 @@ export function DocumentsView({ state }: DocumentsViewProps) {
                 </div>
 
                 {processingFiles.size > 0 && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <h4 className="font-medium">Processing Files</h4>
-                    {Array.from(processingFiles.entries()).map(([fileId, progress]) => (
-                      <div key={fileId} className="space-y-1">
+                    {Array.from(processingFiles.entries()).map(([fileId, { progress, status }]) => (
+                      <div key={fileId} className="space-y-2 p-3 border border-gray-200 rounded-lg">
                         <div className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-2">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Processing OCR...
+                            {progress === 100 ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : progress === 0 && status.includes("Failed") ? (
+                              <AlertCircle className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                            )}
+                            {status}
                           </span>
-                          <span>{progress}%</span>
+                          <span
+                            className={
+                              progress === 100
+                                ? "text-green-600"
+                                : progress === 0 && status.includes("Failed")
+                                  ? "text-red-600"
+                                  : ""
+                            }
+                          >
+                            {progress}%
+                          </span>
                         </div>
-                        <Progress value={progress} />
+                        <Progress
+                          value={progress}
+                          className={
+                            progress === 100
+                              ? "bg-green-100"
+                              : progress === 0 && status.includes("Failed")
+                                ? "bg-red-100"
+                                : ""
+                          }
+                        />
                       </div>
                     ))}
                   </div>
@@ -302,7 +433,7 @@ export function DocumentsView({ state }: DocumentsViewProps) {
               <Card key={doc.id} className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
                       {getFileIcon(doc)}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-gray-900 truncate">{doc.name}</h3>
@@ -339,7 +470,9 @@ export function DocumentsView({ state }: DocumentsViewProps) {
                   </div>
 
                   {doc.ocrText && (
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">{doc.ocrText.substring(0, 150)}...</p>
+                    <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                      <p className="text-sm text-gray-600 line-clamp-3">{doc.ocrText.substring(0, 150)}...</p>
+                    </div>
                   )}
 
                   <div className="flex flex-wrap gap-1 mb-4">

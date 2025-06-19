@@ -145,6 +145,12 @@ Thank you for your business!`,
     selectedFolder: null,
     searchQuery: "",
     isProcessing: false,
+    settings: {
+      ocrLanguages: ["eng", "hin", "tel"],
+      defaultLanguage: "eng",
+      storageLocation: "browser",
+      autoBackup: true,
+    },
   }
 
   private static listeners: Array<(state: AppState) => void> = []

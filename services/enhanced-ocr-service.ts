@@ -1,248 +1,221 @@
-import { DatabaseService } from "./database-service"
-import type { SearchIndex, OCRLanguage } from "../types"
+import type { OCRLanguage } from "../types"
 
 export class EnhancedOCRService {
-  private static isInitialized = false
   private static supportedLanguages: OCRLanguage[] = [
     { code: "eng", name: "English", nativeName: "English" },
     { code: "hin", name: "Hindi", nativeName: "हिन्दी" },
     { code: "tel", name: "Telugu", nativeName: "తెలుగు" },
-    { code: "ara", name: "Arabic", nativeName: "العربية" },
     { code: "spa", name: "Spanish", nativeName: "Español" },
     { code: "fra", name: "French", nativeName: "Français" },
     { code: "deu", name: "German", nativeName: "Deutsch" },
+    { code: "ita", name: "Italian", nativeName: "Italiano" },
+    { code: "por", name: "Portuguese", nativeName: "Português" },
+    { code: "rus", name: "Russian", nativeName: "Русский" },
+    { code: "jpn", name: "Japanese", nativeName: "日本語" },
+    { code: "kor", name: "Korean", nativeName: "한국어" },
     { code: "chi_sim", name: "Chinese Simplified", nativeName: "简体中文" },
+    { code: "chi_tra", name: "Chinese Traditional", nativeName: "繁體中文" },
+    { code: "ara", name: "Arabic", nativeName: "العربية" },
   ]
-
-  static async initialize() {
-    if (this.isInitialized) return
-
-    await DatabaseService.initialize()
-    this.isInitialized = true
-    console.log("Enhanced OCR Service initialized with multi-language support")
-  }
 
   static getSupportedLanguages(): OCRLanguage[] {
     return this.supportedLanguages
   }
 
-  static async extractText(
+  static async processDocument(
     file: File,
     languages: string[] = ["eng"],
     onProgress?: (progress: number) => void,
-  ): Promise<{ text: string; language: string }> {
-    if (!this.isInitialized) {
-      await this.initialize()
-    }
+  ): Promise<{ text: string; confidence: number }> {
+    // Simulate OCR processing with realistic text based on language
+    return new Promise((resolve) => {
+      let progress = 0
+      const interval = setInterval(() => {
+        progress += Math.random() * 20
+        if (onProgress) onProgress(Math.min(progress, 90))
 
-    try {
-      // Simulate processing progress
-      const steps = [0, 15, 30, 50, 70, 85, 100]
-      for (const progress of steps) {
-        onProgress?.(progress)
-        await new Promise((resolve) => setTimeout(resolve, 400))
-      }
+        if (progress >= 90) {
+          clearInterval(interval)
+          if (onProgress) onProgress(100)
 
-      // Determine primary language for text generation
-      const primaryLanguage = languages[0] || "eng"
-      const extractedText = this.generateMultiLanguageText(file, primaryLanguage)
+          // Generate realistic text based on primary language
+          const primaryLang = languages[0] || "eng"
+          const text = this.generateRealisticText(file.name, primaryLang)
 
-      return {
-        text: extractedText,
-        language: primaryLanguage,
-      }
-    } catch (error) {
-      console.error("OCR processing failed:", error)
-      throw new Error(`Failed to extract text from ${file.name}`)
-    }
-  }
-
-  static async indexDocument(documentId: string, text: string, language: string): Promise<void> {
-    // Tokenize text and create search index
-    const words = this.tokenizeText(text, language)
-    const termFrequency = new Map<string, { count: number; positions: number[] }>()
-
-    // Calculate term frequency and positions
-    words.forEach((word, index) => {
-      const term = word.toLowerCase()
-      if (term.length > 2) {
-        // Ignore very short words
-        if (!termFrequency.has(term)) {
-          termFrequency.set(term, { count: 0, positions: [] })
+          resolve({
+            text,
+            confidence: 0.85 + Math.random() * 0.1, // 85-95% confidence
+          })
         }
-        const entry = termFrequency.get(term)!
-        entry.count++
-        entry.positions.push(index)
-      }
+      }, 200)
     })
-
-    // Save to search index
-    const indexPromises = Array.from(termFrequency.entries()).map(([term, data]) => {
-      const searchIndex: SearchIndex = {
-        id: `${documentId}-${term}-${language}`,
-        documentId,
-        term,
-        frequency: data.count,
-        position: data.positions,
-        language,
-      }
-      return DatabaseService.saveSearchIndex(searchIndex)
-    })
-
-    await Promise.all(indexPromises)
   }
 
-  private static tokenizeText(text: string, language: string): string[] {
-    // Basic tokenization - can be enhanced for different languages
-    let tokens: string[]
-
-    switch (language) {
-      case "hin":
-      case "tel":
-        // For Indic languages, split on whitespace and punctuation
-        tokens = text.split(/[\s\u0964\u0965।॥]+/).filter(Boolean)
-        break
-      case "ara":
-        // For Arabic, handle RTL text
-        tokens = text.split(/[\s\u060C\u061B\u061F\u06D4]+/).filter(Boolean)
-        break
-      case "chi_sim":
-        // For Chinese, each character can be a token
-        tokens = text.split("").filter((char) => /[\u4e00-\u9fff]/.test(char))
-        break
-      default:
-        // Default English tokenization
-        tokens = text.split(/[\s.,;:!?()[\]{}'"]+/).filter(Boolean)
-    }
-
-    return tokens
-  }
-
-  private static generateMultiLanguageText(file: File, language: string): string {
-    const fileName = file.name.toLowerCase()
-
+  private static generateRealisticText(filename: string, language: string): string {
     const templates = {
-      eng: this.generateEnglishText(fileName),
-      hin: this.generateHindiText(fileName),
-      tel: this.generateTeluguText(fileName),
-    }
+      eng: {
+        business: `BUSINESS DOCUMENT
 
-    return templates[language as keyof typeof templates] || templates.eng
-  }
+This document contains important business information and strategic planning details. The quarterly report shows significant growth in revenue and market expansion opportunities.
 
-  private static generateEnglishText(fileName: string): string {
-    if (fileName.includes("invoice")) {
-      return `INVOICE DOCUMENT
+Key Performance Indicators:
+• Revenue Growth: 25%
+• Customer Acquisition: 1,200 new clients
+• Market Share: 15% increase
+• Operational Efficiency: 30% improvement
 
-Invoice Number: INV-2024-${Math.floor(Math.random() * 9999)}
+Strategic Objectives for Next Quarter:
+1. Expand into emerging markets
+2. Launch new product lines
+3. Enhance customer experience
+4. Implement digital transformation initiatives
+
+Financial Summary:
+Total Revenue: $2,500,000
+Operating Expenses: $1,800,000
+Net Profit: $700,000
+ROI: 28%
+
+This confidential document is intended for internal use only.`,
+
+        invoice: `INVOICE #INV-2024-${Math.floor(Math.random() * 1000)
+          .toString()
+          .padStart(3, "0")}
+
 Date: ${new Date().toLocaleDateString()}
 Due Date: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
 
 Bill To:
-ABC Corporation Limited
-123 Business Avenue, Suite 456
+ABC Corporation
+123 Business Avenue
+Suite 100
 New York, NY 10001
-United States
 
-Description                    Quantity    Rate        Amount
-Professional Services              40      $125.00     $5,000.00
-Consulting Hours                   20      $150.00     $3,000.00
-Software License                    1      $500.00       $500.00
-                                                    ____________
-                                          Subtotal:    $8,500.00
-                                          Tax (8%):      $680.00
-                                          Total:       $9,180.00
+Description                    Qty    Rate      Amount
+Professional Services           40    $125.00   $5,000.00
+Consulting Hours               20    $150.00   $3,000.00
+Software License                1    $500.00     $500.00
+                                              __________
+                                    Subtotal:  $8,500.00
+                                    Tax (8%):    $680.00
+                                    Total:     $9,180.00
 
 Payment Terms: Net 30 days
-Payment Methods: Bank Transfer, Check, Credit Card
+Thank you for your business!`,
 
-Thank you for your business!
-For questions, contact: billing@company.com`
+        contract: `SERVICE AGREEMENT
+
+This Service Agreement ("Agreement") is entered into on ${new Date().toLocaleDateString()} between the parties for the provision of professional services.
+
+TERMS AND CONDITIONS:
+
+1. SCOPE OF SERVICES
+The service provider agrees to deliver the following services:
+- Consulting and advisory services
+- Technical implementation support
+- Project management and coordination
+- Quality assurance and testing
+
+2. PAYMENT TERMS
+- Total contract value: $50,000
+- Payment schedule: Monthly installments
+- Late payment fee: 1.5% per month
+- Currency: USD
+
+3. DELIVERABLES
+All deliverables will be provided according to the agreed timeline and specifications outlined in the project scope document.
+
+4. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality regarding all proprietary information shared during the course of this agreement.
+
+This agreement is governed by the laws of the jurisdiction specified herein.`,
+      },
+
+      hin: `व्यावसायिक दस्तावेज़
+
+यह दस्तावेज़ महत्वपूर्ण व्यावसायिक जानकारी और रणनीतिक योजना विवरण शामिल करता है। त्रैमासिक रिपोर्ट राजस्व में महत्वपूर्ण वृद्धि और बाज़ार विस्तार के अवसर दिखाती है।
+
+मुख्य प्रदर्शन संकेतक:
+• राजस्व वृद्धि: 25%
+• ग्राहक अधिग्रहण: 1,200 नए ग्राहक
+• बाज़ार हिस्सेदारी: 15% वृद्धि
+• परिचालन दक्षता: 30% सुधार
+
+अगली तिमाही के लिए रणनीतिक उद्देश्य:
+1. उभरते बाज़ारों में विस्तार
+2. नई उत्पाद श्रृंखला लॉन्च करना
+3. ग्राहक अनुभव में सुधार
+4. डिजिटल परिवर्तन पहल लागू करना
+
+वित्तीय सारांश:
+कुल राजस्व: $25,00,000
+परिचालन व्यय: $18,00,000
+शुद्ध लाभ: $7,00,000
+ROI: 28%
+
+यह गोपनीय दस्तावेज़ केवल आंतरिक उपयोग के लिए है।`,
+
+      tel: `వ్యాపార పత్రం
+
+ఈ పత్రంలో ముఖ్యమైన వ్యాపార సమాచారం మరియు వ్యూహాత్మక ప్రణాళిక వివరాలు ఉన్నాయి. త్రైమాసిక నివేదిక ఆదాయంలో గణనీయమైన వృద్ధి మరియు మార్కెట్ విస్తరణ అవకాశాలను చూపిస్తుంది।
+
+ముఖ్య పనితీరు సూచికలు:
+• ఆదాయ వృద్ధి: 25%
+• కస్టమర్ సేకరణ: 1,200 కొత్త క్లయింట్లు
+• మార్కెట్ వాటా: 15% పెరుగుదల
+• కార్యాచరణ సామర్థ్యం: 30% మెరుగుదల
+
+తదుపరి త్రైమాసికానికి వ్యూహాత్మక లక్ష్యాలు:
+1. అభివృద్ధి చెందుతున్న మార్కెట్లలోకి విస్తరణ
+2. కొత్త ఉత్పత్తి శ్రేణులను ప్రారంభించడం
+3. కస్టమర్ అనుభవాన్ని మెరుగుపరచడం
+4. డిజిటల్ పరివర్తన కార్యక్రమాలను అమలు చేయడం
+
+ఆర్థిక సారాంశం:
+మొత్తం ఆదాయం: $25,00,000
+నిర్వహణ ఖర్చులు: $18,00,000
+నికర లాభం: $7,00,000
+ROI: 28%
+
+ఈ గోప్య పత్రం అంతర్గత వినియోగం కోసం మాత్రమే.`,
     }
 
-    return `BUSINESS DOCUMENT
+    // Determine document type from filename
+    const lowerFilename = filename.toLowerCase()
+    let docType = "business"
 
-Document Title: ${fileName.replace(/[-_]/g, " ").replace(/\.[^.]*$/, "")}
-Processing Date: ${new Date().toLocaleString()}
-Language: English
+    if (lowerFilename.includes("invoice") || lowerFilename.includes("bill")) {
+      docType = "invoice"
+    } else if (lowerFilename.includes("contract") || lowerFilename.includes("agreement")) {
+      docType = "contract"
+    }
 
-EXECUTIVE SUMMARY
-This document contains important business information that has been processed using advanced OCR technology with multi-language support including English, Hindi, and Telugu.
-
-KEY FEATURES
-• Multi-language OCR processing
-• Indexed search capabilities
-• Embedded database storage
-• Configurable storage location
-• Real-time text extraction
-
-TECHNICAL SPECIFICATIONS
-The document management system supports various file formats including PDF, DOC, DOCX, and image files. All extracted text is automatically indexed for fast search and retrieval.
-
-SEARCH CAPABILITIES
-The system creates searchable indexes for all processed documents, enabling quick retrieval based on content, tags, and metadata.
-
-This document is now fully searchable and integrated into your document management system.`
+    // Get template for language and document type
+    const langTemplates = templates[language as keyof typeof templates] || templates.eng
+    return langTemplates[docType as keyof typeof langTemplates] || langTemplates.business
   }
 
-  private static generateHindiText(fileName: string): string {
-    return `व्यावसायिक दस्तावेज़
+  static async detectLanguage(text: string): Promise<string> {
+    // Simple language detection based on character patterns
+    const hindiPattern = /[\u0900-\u097F]/
+    const teluguPattern = /[\u0C00-\u0C7F]/
+    const arabicPattern = /[\u0600-\u06FF]/
+    const chinesePattern = /[\u4E00-\u9FFF]/
+    const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF]/
+    const koreanPattern = /[\uAC00-\uD7AF]/
 
-दस्तावेज़ शीर्षक: ${fileName.replace(/[-_]/g, " ").replace(/\.[^.]*$/, "")}
-प्रसंस्करण दिनांक: ${new Date().toLocaleDateString("hi-IN")}
-भाषा: हिन्दी
+    if (hindiPattern.test(text)) return "hin"
+    if (teluguPattern.test(text)) return "tel"
+    if (arabicPattern.test(text)) return "ara"
+    if (chinesePattern.test(text)) return "chi_sim"
+    if (japanesePattern.test(text)) return "jpn"
+    if (koreanPattern.test(text)) return "kor"
 
-कार्यकारी सारांश
-यह दस्तावेज़ महत्वपूर्ण व्यावसायिक जानकारी शामिल करता है जो उन्नत OCR तकनीक का उपयोग करके संसाधित किया गया है।
-
-मुख्य विशेषताएं
-• बहुभाषी OCR प्रसंस्करण
-• अनुक्रमित खोज क्षमताएं
-• एम्बेडेड डेटाबेस भंडारण
-• कॉन्फ़िगरेबल भंडारण स्थान
-• वास्तविक समय पाठ निष्कर्षण
-
-तकनीकी विनिर्देश
-दस्तावेज़ प्रबंधन प्रणाली PDF, DOC, DOCX और छवि फ़ाइलों सहित विभिन्न फ़ाइल प्रारूपों का समर्थन करती है।
-
-खोज क्षमताएं
-सिस्टम सभी संसाधित दस्तावेज़ों के लिए खोजने योग्य अनुक्रमणिका बनाता है, जो सामग्री, टैग और मेटाडेटा के आधार पर त्वरित पुनर्प्राप्ति को सक्षम बनाता है।
-
-यह दस्तावेज़ अब पूरी तरह से खोजने योग्य है और आपके दस्तावेज़ प्रबंधन सिस्टम में एकीकृत है।`
+    return "eng" // Default to English
   }
 
-  private static generateTeluguText(fileName: string): string {
-    return `వ్యాపార పత్రం
-
-పత్రం శీర్షిక: ${fileName.replace(/[-_]/g, " ").replace(/\.[^.]*$/, "")}
-ప్రాసెసింగ్ తేదీ: ${new Date().toLocaleDateString("te-IN")}
-భాష: తెలుగు
-
-కార్యనిర్వాహక సారాంశం
-ఈ పత్రంలో అధునాతన OCR సాంకేతికతను ఉపయోగించి ప్రాసెస్ చేయబడిన ముఖ్యమైన వ్యాపార సమాచారం ఉంది.
-
-ముఖ్య లక్షణాలు
-• బహుభాషా OCR ప్రాసెసింగ్
-• ఇండెక్స్డ్ సెర్చ్ సామర్థ్యాలు
-• ఎంబెడెడ్ డేటాబేస్ స్టోరేజ్
-• కాన్ఫిగరబుల్ స్టోరేజ్ లొకేషన్
-• రియల్ టైమ్ టెక్స్ట్ ఎక్స్‌ట్రాక్షన్
-
-సాంకేతిక వివరణలు
-డాక్యుమెంట్ మేనేజ్‌మెంట్ సిస్టమ్ PDF, DOC, DOCX మరియు ఇమేజ్ ఫైల్స్‌తో సహా వివిధ ఫైల్ ఫార్మాట్‌లకు మద్దతు ఇస్తుంది.
-
-సెర్చ్ సామర్థ్యాలు
-సిస్టమ్ అన్ని ప్రాసెస్ చేయబడిన డాక్యుమెంట్‌ల కోసం సెర్చ్ చేయగల ఇండెక్స్‌లను సృష్టిస్తుంది, కంటెంట్, ట్యాగ్‌లు మరియు మెటాడేటా ఆధారంగా త్వరిత రిట్రీవల్‌ను ప్రారంభిస్తుంది.
-
-ఈ పత్రం ఇప్పుడు పూర్తిగా సెర్చ్ చేయగలదు మరియు మీ డాక్యుమెంట్ మేనేజ్‌మెంట్ సిస్టమ్‌లో ఇంటిగ్రేట్ చేయబడింది.`
-  }
-
-  static async searchDocuments(query: string, language?: string): Promise<string[]> {
-    return DatabaseService.searchDocuments(query, language)
-  }
-
-  static async terminate() {
-    this.isInitialized = false
-    console.log("Enhanced OCR Service terminated")
+  static getLanguageName(code: string): string {
+    const lang = this.supportedLanguages.find((l) => l.code === code)
+    return lang ? lang.nativeName : code
   }
 }

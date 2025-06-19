@@ -9,12 +9,12 @@ interface DatabaseSchema {
 }
 
 export class DatabaseService {
-  private static dbName = "DocuFlowProDB"
+  private static dbName = "DocuFlowDB"
   private static version = 1
   private static db: IDBDatabase | null = null
   private static isInitialized = false
 
-  static async initialize(): Promise<void> {
+  static async init(): Promise<void> {
     if (this.isInitialized && this.db) return
 
     return new Promise((resolve, reject) => {
@@ -34,8 +34,10 @@ export class DatabaseService {
         // Create object stores
         if (!db.objectStoreNames.contains("documents")) {
           const documentsStore = db.createObjectStore("documents", { keyPath: "id" })
-          documentsStore.createIndex("folderId", "folderId", { unique: false })
+          documentsStore.createIndex("name", "name", { unique: false })
+          documentsStore.createIndex("type", "type", { unique: false })
           documentsStore.createIndex("tags", "tags", { unique: false, multiEntry: true })
+          documentsStore.createIndex("folderId", "folderId", { unique: false })
           documentsStore.createIndex("createdAt", "createdAt", { unique: false })
         }
 
@@ -50,8 +52,8 @@ export class DatabaseService {
 
         if (!db.objectStoreNames.contains("searchIndex")) {
           const searchStore = db.createObjectStore("searchIndex", { keyPath: "id" })
-          searchStore.createIndex("documentId", "documentId", { unique: false })
           searchStore.createIndex("term", "term", { unique: false })
+          searchStore.createIndex("documentId", "documentId", { unique: false })
           searchStore.createIndex("language", "language", { unique: false })
         }
 
@@ -229,21 +231,21 @@ export class DatabaseService {
     })
   }
 
-  static async saveSettings(settings: AppState["settings"]): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized")
+  static async saveSettings(settings: any): Promise<void> {
+    if (!this.db) await this.init()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["settings"], "readwrite")
       const store = transaction.objectStore("settings")
-      const request = store.put({ key: "appSettings", ...settings })
+      const request = store.put({ key: "appSettings", value: settings })
 
       request.onerror = () => reject(request.error)
       request.onsuccess = () => resolve()
     })
   }
 
-  static async getSettings(): Promise<AppState["settings"] | null> {
-    if (!this.db) throw new Error("Database not initialized")
+  static async getSettings(): Promise<any> {
+    if (!this.db) await this.init()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["settings"], "readonly")
@@ -252,151 +254,159 @@ export class DatabaseService {
 
       request.onerror = () => reject(request.error)
       request.onsuccess = () => {
-        const result = request.result
-        if (result) {
-          const { key, ...settings } = result
-          resolve(settings)
-        } else {
-          resolve(null)
-        }
+        resolve(request.result?.value || null)
       }
-    })
-  }
-
-  static async exportData(): Promise<DatabaseSchema> {
-    const [documents, folders, tags, searchIndex, settings] = await Promise.all([
-      this.getDocuments(),
-      this.getFolders(),
-      this.getTags(),
-      this.getSearchIndex(),
-      this.getSettings(),
-    ])
-
-    return {
-      documents,
-      folders,
-      tags,
-      searchIndex,
-      settings: settings || {
-        ocrLanguages: ["eng", "hin", "tel"],
-        defaultLanguage: "eng",
-        storageLocation: "browser",
-        autoBackup: true,
-      },
-    }
-  }
-
-  static async importData(data: Partial<DatabaseSchema>): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized")
-
-    const transaction = this.db.transaction(["documents", "folders", "tags", "searchIndex", "settings"], "readwrite")
-
-    try {
-      if (data.documents) {
-        const docStore = transaction.objectStore("documents")
-        for (const doc of data.documents) {
-          await new Promise<void>((resolve, reject) => {
-            const request = docStore.put(doc)
-            request.onsuccess = () => resolve()
-            request.onerror = () => reject(request.error)
-          })
-        }
-      }
-
-      if (data.folders) {
-        const folderStore = transaction.objectStore("folders")
-        for (const folder of data.folders) {
-          await new Promise<void>((resolve, reject) => {
-            const request = folderStore.put(folder)
-            request.onsuccess = () => resolve()
-            request.onerror = () => reject(request.error)
-          })
-        }
-      }
-
-      if (data.tags) {
-        const tagStore = transaction.objectStore("tags")
-        for (const tag of data.tags) {
-          await new Promise<void>((resolve, reject) => {
-            const request = tagStore.put(tag)
-            request.onsuccess = () => resolve()
-            request.onerror = () => reject(request.error)
-          })
-        }
-      }
-
-      if (data.searchIndex) {
-        const searchStore = transaction.objectStore("searchIndex")
-        for (const index of data.searchIndex) {
-          await new Promise<void>((resolve, reject) => {
-            const request = searchStore.put(index)
-            request.onsuccess = () => resolve()
-            request.onerror = () => reject(request.error)
-          })
-        }
-      }
-
-      if (data.settings) {
-        const settingsStore = transaction.objectStore("settings")
-        await new Promise<void>((resolve, reject) => {
-          const request = settingsStore.put({ key: "appSettings", ...data.settings })
-          request.onsuccess = () => resolve()
-          request.onerror = () => reject(request.error)
-        })
-      }
-    } catch (error) {
-      transaction.abort()
-      throw error
-    }
-  }
-
-  private static async getSearchIndex(): Promise<SearchIndex[]> {
-    if (!this.db) throw new Error("Database not initialized")
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(["searchIndex"], "readonly")
-      const store = transaction.objectStore("searchIndex")
-      const request = store.getAll()
-
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve(request.result || [])
-    })
-  }
-
-  static async clearDatabase(): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized")
-
-    const transaction = this.db.transaction(["documents", "folders", "tags", "searchIndex", "settings"], "readwrite")
-
-    const stores = ["documents", "folders", "tags", "searchIndex", "settings"]
-
-    return new Promise((resolve, reject) => {
-      let completed = 0
-
-      stores.forEach((storeName) => {
-        const store = transaction.objectStore(storeName)
-        const request = store.clear()
-
-        request.onsuccess = () => {
-          completed++
-          if (completed === stores.length) {
-            resolve()
-          }
-        }
-
-        request.onerror = () => reject(request.error)
-      })
     })
   }
 
   static async getStorageUsage(): Promise<{ used: number; quota: number }> {
     if ("storage" in navigator && "estimate" in navigator.storage) {
-      const estimate = await navigator.storage.estimate()
-      return {
-        used: estimate.usage || 0,
-        quota: estimate.quota || 0,
+      try {
+        const estimate = await navigator.storage.estimate()
+        return {
+          used: estimate.usage || 0,
+          quota: estimate.quota || 0,
+        }
+      } catch (error) {
+        console.error("Failed to get storage estimate:", error)
       }
     }
+
+    // Fallback for browsers that don't support storage estimation
     return { used: 0, quota: 0 }
+  }
+
+  static async exportData(): Promise<any> {
+    if (!this.db) await this.init()
+
+    const documents = await this.getAllFromStore("documents")
+    const folders = await this.getAllFromStore("folders")
+    const settings = await this.getSettings()
+
+    return {
+      documents,
+      folders,
+      settings,
+      exportDate: new Date().toISOString(),
+      version: "1.0",
+    }
+  }
+
+  static async importData(data: any): Promise<void> {
+    if (!this.db) await this.init()
+
+    const transaction = this.db!.transaction(["documents", "folders", "settings"], "readwrite")
+
+    // Clear existing data
+    await this.clearStore("documents")
+    await this.clearStore("folders")
+
+    // Import new data
+    if (data.documents) {
+      const documentsStore = transaction.objectStore("documents")
+      for (const doc of data.documents) {
+        documentsStore.add(doc)
+      }
+    }
+
+    if (data.folders) {
+      const foldersStore = transaction.objectStore("folders")
+      for (const folder of data.folders) {
+        foldersStore.add(folder)
+      }
+    }
+
+    if (data.settings) {
+      await this.saveSettings(data.settings)
+    }
+  }
+
+  static async clearDatabase(): Promise<void> {
+    if (!this.db) await this.init()
+
+    await this.clearStore("documents")
+    await this.clearStore("folders")
+    await this.clearStore("settings")
+    await this.clearStore("searchIndex")
+  }
+
+  private static async getAllFromStore(storeName: string): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], "readonly")
+      const store = transaction.objectStore(storeName)
+      const request = store.getAll()
+
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve(request.result)
+    })
+  }
+
+  private static async clearStore(storeName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], "readwrite")
+      const store = transaction.objectStore(storeName)
+      const request = store.clear()
+
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve()
+    })
+  }
+
+  // Search indexing methods
+  static async indexDocument(document: any): Promise<void> {
+    if (!this.db) await this.init()
+
+    const words = this.extractWords(document.ocrText + " " + document.content)
+    const transaction = this.db!.transaction(["searchIndex"], "readwrite")
+    const store = transaction.objectStore("searchIndex")
+
+    // Clear existing index for this document
+    const deleteRequest = store.index("documentId").openCursor(IDBKeyRange.only(document.id))
+    deleteRequest.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result
+      if (cursor) {
+        cursor.delete()
+        cursor.continue()
+      }
+    }
+
+    // Add new index entries
+    words.forEach((word, index) => {
+      const indexEntry = {
+        id: `${document.id}_${index}`,
+        documentId: document.id,
+        term: word.toLowerCase(),
+        frequency: 1,
+        position: [index],
+        language: document.language || "eng",
+      }
+      store.add(indexEntry)
+    })
+  }
+
+  static async searchIndex(query: string): Promise<string[]> {
+    if (!this.db) await this.init()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(["searchIndex"], "readonly")
+      const store = transaction.objectStore("searchIndex")
+      const index = store.index("term")
+      const request = index.getAll(IDBKeyRange.bound(query.toLowerCase(), query.toLowerCase() + "\uffff"))
+
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        const results = request.result
+        const documentIds = [...new Set(results.map((r) => r.documentId))]
+        resolve(documentIds)
+      }
+    })
+  }
+
+  private static extractWords(text: string): string[] {
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 2)
   }
 }

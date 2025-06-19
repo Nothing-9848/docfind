@@ -272,7 +272,7 @@ export function Sidebar({ state, updateState }: EnhancedSidebarProps) {
         <div className="text-xs text-gray-500 space-y-1">
           <div className="flex justify-between">
             <span>Storage:</span>
-            <span>{state.settings.storageLocation}</span>
+            <span>{state.settings?.storageLocation || "browser"}</span>
           </div>
           <div className="flex justify-between">
             <span>Documents:</span>
@@ -280,7 +280,7 @@ export function Sidebar({ state, updateState }: EnhancedSidebarProps) {
           </div>
           <div className="flex justify-between">
             <span>Languages:</span>
-            <span>{state.settings.ocrLanguages.length}</span>
+            <span>{state.settings?.ocrLanguages?.length || 0}</span>
           </div>
         </div>
       </div>

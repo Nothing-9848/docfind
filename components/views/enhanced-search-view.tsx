@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, FileText, Clock, Languages, Tag, Calendar, Zap, TrendingUp, Eye, Download } from "lucide-react"
-import { EnhancedOCRService } from "../../services/enhanced-ocr-service"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Search, FileType, Tag, FolderOpen, X, Eye, Download, Clock, TrendingUp } from "lucide-react"
+import { DocumentViewerModal } from "../document-viewer-modal"
 import type { AppState, Document } from "../../types"
 
 interface SearchViewProps {
@@ -16,153 +17,24 @@ interface SearchViewProps {
   updateState: (updates: Partial<AppState>) => void
 }
 
-export function SearchView({ state, updateState }: SearchViewProps) {
+export function EnhancedSearchView({ state, updateState }: SearchViewProps) {
   const [searchQuery, setSearchQuery] = useState(state.searchQuery || "")
-  const [searchResults, setSearchResults] = useState<Document[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchHistory, setSearchHistory] = useState<string[]>([])
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("all")
-  const [searchType, setSearchType] = useState<"all" | "content" | "tags" | "filename">("all")
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedFolders, setSelectedFolders] = useState<string[]>([])
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: "", to: "" })
+  const [sizeRange, setSizeRange] = useState<{ min: string; max: string }>({ min: "", max: "" })
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
+  const [searchHistory, setSearchHistory] = useState<string[]>([
+    "business plan",
+    "invoice 2024",
+    "contract agreement",
+    "financial report",
+  ])
 
-  const supportedLanguages = EnhancedOCRService.getSupportedLanguages()
+  const documentTypes = ["pdf", "image", "doc", "text"]
 
-  useEffect(() => {
-    if (state.searchQuery) {
-      setSearchQuery(state.searchQuery)
-      performSearch(state.searchQuery)
-    }
-  }, [state.searchQuery])
-
-  const performSearch = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([])
-      return
-    }
-
-    setIsSearching(true)
-
-    try {
-      // Add to search history
-      if (!searchHistory.includes(query)) {
-        setSearchHistory((prev) => [query, ...prev.slice(0, 9)])
-      }
-
-      // Parse advanced search operators
-      const { cleanQuery, filters } = parseSearchQuery(query)
-
-      // Get document IDs from indexed search
-      const documentIds = await EnhancedOCRService.searchDocuments(
-        cleanQuery,
-        selectedLanguage === "all" ? undefined : selectedLanguage,
-      )
-
-      // Filter documents based on search results and additional filters
-      const results = state.documents.filter((doc) => {
-        // If we have indexed results, prioritize them
-        if (documentIds.length > 0 && !documentIds.includes(doc.id)) {
-          return false
-        }
-
-        // Apply search type filter
-        const matchesSearchType = () => {
-          switch (searchType) {
-            case "content":
-              return (
-                doc.ocrText.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-                doc.content.toLowerCase().includes(cleanQuery.toLowerCase())
-              )
-            case "tags":
-              return doc.tags.some((tag) => tag.toLowerCase().includes(cleanQuery.toLowerCase()))
-            case "filename":
-              return (
-                doc.name.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-                doc.originalName.toLowerCase().includes(cleanQuery.toLowerCase())
-              )
-            default:
-              return (
-                doc.name.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-                doc.ocrText.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-                doc.content.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-                doc.tags.some((tag) => tag.toLowerCase().includes(cleanQuery.toLowerCase()))
-              )
-          }
-        }
-
-        if (!matchesSearchType()) return false
-
-        // Apply additional filters
-        if (filters.tag && !doc.tags.includes(filters.tag)) return false
-        if (filters.type && doc.type !== filters.type) return false
-        if (filters.folder) {
-          const folder = state.folders.find((f) => f.name.toLowerCase() === filters.folder.toLowerCase())
-          if (!folder || doc.folderId !== folder.id) return false
-        }
-
-        return true
-      })
-
-      // Sort by relevance (prioritize indexed results order)
-      if (documentIds.length > 0) {
-        results.sort((a, b) => {
-          const aIndex = documentIds.indexOf(a.id)
-          const bIndex = documentIds.indexOf(b.id)
-          if (aIndex === -1 && bIndex === -1) return 0
-          if (aIndex === -1) return 1
-          if (bIndex === -1) return -1
-          return aIndex - bIndex
-        })
-      }
-
-      setSearchResults(results)
-    } catch (error) {
-      console.error("Search failed:", error)
-      // Fallback to simple search
-      const results = state.documents.filter(
-        (doc) =>
-          doc.name.toLowerCase().includes(query.toLowerCase()) ||
-          doc.ocrText.toLowerCase().includes(query.toLowerCase()) ||
-          doc.tags.some((tag) => tag.toLowerCase().includes(query.toLowerCase())),
-      )
-      setSearchResults(results)
-    } finally {
-      setIsSearching(false)
-    }
-  }
-
-  const parseSearchQuery = (query: string) => {
-    const filters: { tag?: string; type?: string; folder?: string } = {}
-    let cleanQuery = query
-
-    // Extract tag: operator
-    const tagMatch = query.match(/tag:(\w+)/i)
-    if (tagMatch) {
-      filters.tag = tagMatch[1]
-      cleanQuery = cleanQuery.replace(/tag:\w+/gi, "").trim()
-    }
-
-    // Extract type: operator
-    const typeMatch = query.match(/type:(pdf|doc|image|text)/i)
-    if (typeMatch) {
-      filters.type = typeMatch[1].toLowerCase() as any
-      cleanQuery = cleanQuery.replace(/type:\w+/gi, "").trim()
-    }
-
-    // Extract folder: operator
-    const folderMatch = query.match(/folder:(\w+)/i)
-    if (folderMatch) {
-      filters.folder = folderMatch[1]
-      cleanQuery = cleanQuery.replace(/folder:\w+/gi, "").trim()
-    }
-
-    return { cleanQuery, filters }
-  }
-
-  const handleSearch = () => {
-    updateState({ searchQuery })
-    performSearch(searchQuery)
-  }
-
-  const formatFileSize = (bytes: number) => {
+  const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
@@ -170,30 +42,104 @@ export function SearchView({ state, updateState }: SearchViewProps) {
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
-  const getFileIcon = (doc: Document) => {
-    switch (doc.type) {
-      case "pdf":
-        return <FileText className="h-5 w-5 text-red-500" />
-      case "image":
-        return <FileText className="h-5 w-5 text-green-500" />
-      default:
-        return <FileText className="h-5 w-5 text-blue-500" />
+  const parseSearchQuery = (query: string) => {
+    const operators = {
+      tag: [] as string[],
+      type: [] as string[],
+      folder: [] as string[],
+      text: [] as string[],
+    }
+
+    const parts = query.split(/\s+/)
+    const currentText: string[] = []
+
+    parts.forEach((part) => {
+      if (part.startsWith("tag:")) {
+        operators.tag.push(part.substring(4))
+      } else if (part.startsWith("type:")) {
+        operators.type.push(part.substring(5))
+      } else if (part.startsWith("folder:")) {
+        operators.folder.push(part.substring(7))
+      } else {
+        currentText.push(part)
+      }
+    })
+
+    operators.text = currentText
+
+    return operators
+  }
+
+  const searchDocuments = () => {
+    const operators = parseSearchQuery(searchQuery)
+
+    return state.documents.filter((doc) => {
+      // Text search
+      const textMatch =
+        operators.text.length === 0 ||
+        operators.text.some(
+          (term) =>
+            doc.name.toLowerCase().includes(term.toLowerCase()) ||
+            doc.ocrText.toLowerCase().includes(term.toLowerCase()) ||
+            doc.content.toLowerCase().includes(term.toLowerCase()),
+        )
+
+      // Tag filter
+      const tagMatch =
+        operators.tag.length === 0 ||
+        operators.tag.some((tag) => doc.tags.includes(tag)) ||
+        selectedTags.length === 0 ||
+        selectedTags.some((tag) => doc.tags.includes(tag))
+
+      // Type filter
+      const typeMatch =
+        operators.type.length === 0 ||
+        operators.type.includes(doc.type) ||
+        selectedTypes.length === 0 ||
+        selectedTypes.includes(doc.type)
+
+      // Folder filter
+      const folderMatch =
+        operators.folder.length === 0 || selectedFolders.length === 0 || selectedFolders.includes(doc.folderId || "")
+
+      // Date range filter
+      const dateMatch =
+        !dateRange.from ||
+        !dateRange.to ||
+        (new Date(doc.createdAt) >= new Date(dateRange.from) && new Date(doc.createdAt) <= new Date(dateRange.to))
+
+      // Size range filter
+      const sizeMatch =
+        (!sizeRange.min || doc.size >= Number.parseInt(sizeRange.min)) &&
+        (!sizeRange.max || doc.size <= Number.parseInt(sizeRange.max))
+
+      return textMatch && tagMatch && typeMatch && folderMatch && dateMatch && sizeMatch
+    })
+  }
+
+  const searchResults = searchDocuments()
+
+  const handleSearch = () => {
+    updateState({ searchQuery })
+    if (searchQuery && !searchHistory.includes(searchQuery)) {
+      setSearchHistory([searchQuery, ...searchHistory.slice(0, 9)])
     }
   }
 
-  const highlightText = (text: string, query: string) => {
-    if (!query.trim()) return text
-
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
-    return text.replace(regex, '<mark class="bg-yellow-200">$1</mark>')
+  const clearFilters = () => {
+    setSearchQuery("")
+    setSelectedTypes([])
+    setSelectedTags([])
+    setSelectedFolders([])
+    setDateRange({ from: "", to: "" })
+    setSizeRange({ min: "", max: "" })
+    updateState({ searchQuery: "" })
   }
 
-  const quickSearches = [
-    { label: "Recent PDFs", query: "type:pdf", icon: FileText },
-    { label: "Business Documents", query: "tag:business", icon: Tag },
-    { label: "This Month", query: "date:2024", icon: Calendar },
-    { label: "Large Files", query: "size:>1MB", icon: TrendingUp },
-  ]
+  const addSearchOperator = (operator: string, value: string) => {
+    const newQuery = searchQuery ? `${searchQuery} ${operator}:${value}` : `${operator}:${value}`
+    setSearchQuery(newQuery)
+  }
 
   return (
     <ScrollArea className="h-full">
@@ -201,280 +147,293 @@ export function SearchView({ state, updateState }: SearchViewProps) {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Advanced Search</h1>
-          <p className="text-gray-600">Search across all documents, OCR text, and metadata with powerful operators</p>
+          <p className="text-gray-600">Find documents using powerful search operators and filters</p>
         </div>
 
-        {/* Search Interface */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Search className="h-5 w-5 mr-2" />
-              Search Documents
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex gap-4">
-                <div className="flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Search Filters */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Search Input */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Search Query</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Search documents... (try: tag:business, type:pdf, folder:contracts)"
+                    placeholder="Enter search terms..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-                    className="h-12 text-lg"
+                    className="pl-10"
                   />
                 </div>
-                <Button onClick={handleSearch} disabled={isSearching} className="h-12 px-8">
-                  {isSearching ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Search
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              <div className="flex gap-4">
-                <Select value={searchType} onValueChange={(value: any) => setSearchType(value)}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Fields</SelectItem>
-                    <SelectItem value="content">Content Only</SelectItem>
-                    <SelectItem value="tags">Tags Only</SelectItem>
-                    <SelectItem value="filename">Filename Only</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Languages</SelectItem>
-                    {supportedLanguages.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>
-                        {lang.nativeName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Search Operators Help */}
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-2">Search Operators:</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-blue-800">
-                  <div>
-                    <code className="bg-blue-100 px-1 rounded">tag:business</code> - Find documents with specific tag
-                  </div>
-                  <div>
-                    <code className="bg-blue-100 px-1 rounded">type:pdf</code> - Filter by file type
-                  </div>
-                  <div>
-                    <code className="bg-blue-100 px-1 rounded">folder:contracts</code> - Search in specific folder
-                  </div>
-                  <div>
-                    <code className="bg-blue-100 px-1 rounded">"exact phrase"</code> - Search for exact phrase
-                  </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSearch} className="flex-1">
+                    Search
+                  </Button>
+                  <Button variant="outline" onClick={clearFilters}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Search Results */}
-          <div className="lg:col-span-3">
+                {/* Search Operators Help */}
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>
+                    <strong>Search operators:</strong>
+                  </p>
+                  <p>
+                    • <code>tag:business</code> - Find by tag
+                  </p>
+                  <p>
+                    • <code>type:pdf</code> - Find by file type
+                  </p>
+                  <p>
+                    • <code>folder:documents</code> - Find by folder
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Document Types */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Search Results</span>
-                  {searchResults.length > 0 && (
-                    <Badge variant="secondary">{searchResults.length} documents found</Badge>
-                  )}
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileType className="h-4 w-4" />
+                  Document Types
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {!searchQuery ? (
-                  <div className="text-center py-12">
-                    <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-gray-900 mb-2">Start searching</h3>
-                    <p className="text-gray-500">Enter a search term to find documents across your library</p>
-                  </div>
-                ) : searchResults.length === 0 && !isSearching ? (
-                  <div className="text-center py-12">
-                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-gray-900 mb-2">No results found</h3>
-                    <p className="text-gray-500">Try adjusting your search terms or using different operators</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {searchResults.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start space-x-3 flex-1">
-                            {getFileIcon(doc)}
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-gray-900 mb-1">{doc.name}</h3>
-                              <p className="text-sm text-gray-500 mb-2">
-                                {formatFileSize(doc.size)} • {doc.updatedAt.toLocaleDateString()}
-                                {doc.language && (
-                                  <>
-                                    {" • "}
-                                    <Languages className="h-3 w-3 inline mr-1" />
-                                    {supportedLanguages.find((l) => l.code === doc.language)?.nativeName}
-                                  </>
-                                )}
-                              </p>
-                              {doc.ocrText && (
-                                <div className="bg-gray-100 rounded p-2 mb-2">
-                                  <p
-                                    className="text-sm text-gray-700 line-clamp-2"
-                                    dangerouslySetInnerHTML={{
-                                      __html: highlightText(doc.ocrText.substring(0, 200) + "...", searchQuery),
-                                    }}
-                                  />
-                                </div>
-                              )}
-                              <div className="flex flex-wrap gap-1">
-                                {doc.tags.slice(0, 4).map((tag) => (
-                                  <Badge key={tag} variant="secondary" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                                {doc.tags.length > 4 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{doc.tags.length - 4}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Button size="sm" variant="outline">
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              <Download className="h-4 w-4 mr-1" />
-                              Download
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="space-y-3">
+                  {documentTypes.map((type) => (
+                    <div key={type} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={type}
+                        checked={selectedTypes.includes(type)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedTypes([...selectedTypes, type])
+                          } else {
+                            setSelectedTypes(selectedTypes.filter((t) => t !== type))
+                          }
+                        }}
+                      />
+                      <Label htmlFor={type} className="text-sm font-medium capitalize">
+                        {type}
+                      </Label>
+                      <Badge variant="secondary" className="ml-auto text-xs">
+                        {state.documents.filter((d) => d.type === type).length}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Searches */}
+            {/* Tags */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Zap className="h-4 w-4 mr-2" />
-                  Quick Searches
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Tags
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {state.tags.map((tag) => (
+                    <div key={tag.id} className="flex items-center justify-between">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start h-8 px-2 w-full"
+                        onClick={() => addSearchOperator("tag", tag.name)}
+                      >
+                        <div className={`w-2 h-2 rounded-full bg-${tag.color}-500 mr-2`} />
+                        <span className="text-sm truncate">{tag.name}</span>
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {tag.documentCount}
+                        </Badge>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Folders */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4" />
+                  Folders
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {quickSearches.map((search, index) => (
+                  {state.folders
+                    .filter((f) => f.id !== "root")
+                    .map((folder) => (
+                      <Button
+                        key={folder.id}
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start h-8 px-2 w-full"
+                        onClick={() => addSearchOperator("folder", folder.name)}
+                      >
+                        <FolderOpen className="h-3 w-3 mr-2" />
+                        <span className="text-sm truncate">{folder.name}</span>
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {folder.documentIds.length}
+                        </Badge>
+                      </Button>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Search Results */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Search History */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Recent Searches
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {searchHistory.map((query, index) => (
                     <Button
                       key={index}
-                      variant="ghost"
-                      className="w-full justify-start h-auto p-3"
-                      onClick={() => {
-                        setSearchQuery(search.query)
-                        updateState({ searchQuery: search.query })
-                        performSearch(search.query)
-                      }}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSearchQuery(query)}
+                      className="text-xs"
                     >
-                      <search.icon className="h-4 w-4 mr-3" />
-                      <div className="text-left">
-                        <p className="font-medium">{search.label}</p>
-                        <p className="text-xs text-gray-500">{search.query}</p>
-                      </div>
+                      {query}
                     </Button>
                   ))}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Search History */}
-            {searchHistory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Clock className="h-4 w-4 mr-2" />
-                    Recent Searches
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {searchHistory.slice(0, 5).map((query, index) => (
-                      <Button
-                        key={index}
-                        variant="ghost"
-                        className="w-full justify-start text-sm"
-                        onClick={() => {
-                          setSearchQuery(query)
-                          updateState({ searchQuery: query })
-                          performSearch(query)
-                        }}
-                      >
-                        <Clock className="h-3 w-3 mr-2" />
-                        {query}
-                      </Button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Search Stats */}
+            {/* Results */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Search Statistics
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span>Search Results</span>
+                  <Badge variant="secondary">
+                    {searchResults.length} document{searchResults.length !== 1 ? "s" : ""}
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span>Total Documents:</span>
-                    <span className="font-medium">{state.documents.length}</span>
+                {searchResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {searchResults.map((document) => (
+                      <div
+                        key={document.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <div className="text-2xl">
+                            {document.type === "pdf" ? "📄" : document.type === "image" ? "🖼️" : "📝"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-gray-900 truncate">{document.name}</h3>
+                            <p className="text-sm text-gray-500 line-clamp-2">
+                              {document.ocrText.substring(0, 150)}...
+                            </p>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                              <span>{document.type.toUpperCase()}</span>
+                              <span>{formatBytes(document.size)}</span>
+                              <span>{document.createdAt.toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap gap-1">
+                            {document.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 ml-4">
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedDocument(document)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between">
-                    <span>Indexed Terms:</span>
-                    <span className="font-medium">~{state.documents.length * 50}</span>
+                ) : (
+                  <div className="text-center py-12">
+                    <Search className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+                    <p className="text-gray-500 mb-6">
+                      Try adjusting your search terms or filters to find what you're looking for.
+                    </p>
+                    <Button variant="outline" onClick={clearFilters}>
+                      Clear all filters
+                    </Button>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Languages:</span>
-                    <span className="font-medium">{state.settings.ocrLanguages.length}</span>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Search Tips */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Search Tips
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <h4 className="font-medium mb-2">Search Operators</h4>
+                    <ul className="space-y-1 text-gray-600">
+                      <li>
+                        • Use <code className="bg-gray-100 px-1 rounded">tag:name</code> to search by tag
+                      </li>
+                      <li>
+                        • Use <code className="bg-gray-100 px-1 rounded">type:pdf</code> to filter by file type
+                      </li>
+                      <li>
+                        • Use <code className="bg-gray-100 px-1 rounded">folder:name</code> to search in specific
+                        folders
+                      </li>
+                    </ul>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Search Results:</span>
-                    <span className="font-medium">{searchResults.length}</span>
+                  <div>
+                    <h4 className="font-medium mb-2">Advanced Tips</h4>
+                    <ul className="space-y-1 text-gray-600">
+                      <li>• Combine multiple operators for precise results</li>
+                      <li>• Use quotation marks for exact phrase matching</li>
+                      <li>• Search includes document content and OCR text</li>
+                    </ul>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
+
+        {/* Document Viewer Modal */}
+        {selectedDocument && (
+          <DocumentViewerModal document={selectedDocument} onClose={() => setSelectedDocument(null)} />
+        )}
       </div>
     </ScrollArea>
   )

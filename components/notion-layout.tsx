@@ -41,7 +41,7 @@ export function NotionLayout() {
         ])
 
         // Load settings
-        const settings = await DatabaseService.getSetting("appSettings")
+        const settings = await DatabaseService.getSettings()
 
         setState((prev) => ({
           ...prev,

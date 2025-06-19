@@ -10,14 +10,40 @@ export class DocumentStore {
         type: "pdf",
         size: 2048000,
         content: "Business plan document content...",
-        ocrText:
-          "Strategic business plan for 2024 including financial projections, market analysis, and growth strategies...",
-        tags: ["business", "planning", "strategy"],
+        ocrText: `BUSINESS PLAN 2024
+
+EXECUTIVE SUMMARY
+This comprehensive business plan outlines our strategic direction for the fiscal year 2024. Our company has identified key growth opportunities in emerging markets and technological innovation.
+
+FINANCIAL PROJECTIONS
+• Projected Revenue: $2.5M (25% increase)
+• Operating Expenses: $1.8M
+• Net Profit Margin: 28%
+• ROI: 15.5%
+
+MARKET ANALYSIS
+The market research indicates strong demand for our products with a total addressable market of $50M. Key competitors include established players, but our innovative approach provides competitive advantages.
+
+STRATEGIC OBJECTIVES
+1. Expand into European markets
+2. Launch three new product lines
+3. Increase customer base by 40%
+4. Implement advanced analytics platform
+
+IMPLEMENTATION TIMELINE
+Q1: Market research and product development
+Q2: European market entry
+Q3: Product launches and marketing campaigns
+Q4: Performance evaluation and optimization
+
+This document contains confidential and proprietary information.`,
+        tags: ["business", "planning", "strategy", "pdf"],
         folderId: "folder-1",
         createdAt: new Date("2024-01-15"),
         updatedAt: new Date("2024-01-15"),
         isProcessing: false,
         processingProgress: 100,
+        url: "/placeholder.svg?height=842&width=595", // PDF placeholder
       },
       {
         id: "2",
@@ -26,13 +52,37 @@ export class DocumentStore {
         type: "image",
         size: 512000,
         content: "Invoice template image",
-        ocrText: "INVOICE #001 Date: 2024-01-10 Bill To: Client Name Amount: $1,250.00 Due Date: 2024-02-01",
-        tags: ["invoice", "template", "finance"],
+        ocrText: `INVOICE #INV-2024-001
+
+Date: January 10, 2024
+Due Date: February 10, 2024
+
+Bill To:
+ABC Corporation
+123 Business Avenue
+Suite 100
+New York, NY 10001
+
+Description                    Qty    Rate      Amount
+Professional Services           40    $125.00   $5,000.00
+Consulting Hours               20    $150.00   $3,000.00
+Software License                1    $500.00     $500.00
+                                              __________
+                                    Subtotal:  $8,500.00
+                                    Tax (8%):    $680.00
+                                    Total:     $9,180.00
+
+Payment Terms: Net 30 days
+Payment Methods: Check, Wire Transfer, ACH
+
+Thank you for your business!`,
+        tags: ["invoice", "template", "finance", "image"],
         folderId: "folder-2",
         createdAt: new Date("2024-01-10"),
         updatedAt: new Date("2024-01-10"),
         isProcessing: false,
         processingProgress: 100,
+        url: "/placeholder.svg?height=600&width=800", // Image placeholder
       },
     ],
     folders: [

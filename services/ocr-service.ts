@@ -193,32 +193,103 @@ Extracted from: ${fileName}`
   }
 
   private static generatePDFText(fileName: string): string {
-    return `PDF Document Content
+    const documentTypes = {
+      business: `BUSINESS DOCUMENT
 
-This PDF document has been processed and the following text content has been extracted:
+Company: ${fileName.replace(/[-_]/g, " ").replace(".pdf", "")}
+Document Type: Business Plan/Report
+Pages: ${Math.floor(Math.random() * 20) + 5}
 
-Document Information:
-- Title: ${fileName.replace(".pdf", "").replace(/[-_]/g, " ")}
-- Pages: ${Math.floor(Math.random() * 20) + 1}
-- Creation Date: ${new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+EXECUTIVE SUMMARY
+This document outlines strategic initiatives and business objectives for the current fiscal period. Key performance indicators show positive growth trends across all major business segments.
 
-Content Overview:
-The document contains multiple sections with headers, body text, and formatted elements. Key topics covered include business processes, technical specifications, and procedural guidelines.
+FINANCIAL OVERVIEW
+• Revenue Growth: ${(Math.random() * 20 + 5).toFixed(1)}%
+• Profit Margin: ${(Math.random() * 15 + 10).toFixed(1)}%
+• Market Share: ${(Math.random() * 25 + 15).toFixed(1)}%
+• Customer Satisfaction: ${(Math.random() * 1 + 4).toFixed(1)}/5.0
 
-Main Sections:
-1. Introduction and Overview
-2. Detailed Analysis
-3. Recommendations and Next Steps
-4. Appendices and References
+STRATEGIC OBJECTIVES
+1. Market expansion into new geographical regions
+2. Product line diversification and innovation
+3. Operational efficiency improvements
+4. Customer experience enhancement initiatives
+5. Technology infrastructure modernization
 
-The text has been successfully extracted and is now searchable within the document management system. All formatting, tables, and special characters have been preserved where possible.
+IMPLEMENTATION ROADMAP
+The implementation will be executed in phases over the next 12 months, with quarterly reviews and adjustments based on market conditions and performance metrics.
 
-Quality Assessment:
-- Text Extraction: 98% successful
-- Formatting Preserved: 85%
-- Special Characters: Recognized
+RISK ASSESSMENT
+Potential risks have been identified and mitigation strategies developed to ensure successful execution of the business plan.`,
 
-Extracted from: ${fileName}`
+      contract: `SERVICE AGREEMENT
+
+This Service Agreement is entered into between the parties as outlined below:
+
+PARTIES
+Client: [Client Company Name]
+Service Provider: [Provider Company Name]
+Effective Date: ${new Date().toLocaleDateString()}
+
+SCOPE OF SERVICES
+The Service Provider agrees to deliver the following services:
+• Professional consulting and advisory services
+• Technical implementation and support
+• Training and knowledge transfer
+• Ongoing maintenance and support
+
+TERMS AND CONDITIONS
+1. Service Level Agreements (SLAs)
+2. Payment terms and conditions
+3. Intellectual property rights
+4. Confidentiality and non-disclosure
+5. Termination clauses
+
+FINANCIAL TERMS
+• Contract Value: $${(Math.random() * 100000 + 10000).toFixed(0)}
+• Payment Schedule: Monthly/Quarterly
+• Late Payment Penalties: 1.5% per month
+
+DELIVERABLES
+All deliverables will be provided according to the agreed timeline with quality assurance and client approval processes.`,
+
+      report: `ANALYTICAL REPORT
+
+Report Title: ${fileName.replace(/[-_]/g, " ").replace(".pdf", "")}
+Prepared By: Analytics Team
+Date: ${new Date().toLocaleDateString()}
+
+EXECUTIVE SUMMARY
+This comprehensive analysis provides insights into key performance metrics and trends identified during the reporting period.
+
+KEY FINDINGS
+• Performance increased by ${(Math.random() * 30 + 10).toFixed(1)}%
+• Efficiency gains of ${(Math.random() * 20 + 5).toFixed(1)}%
+• Cost reduction of ${(Math.random() * 15 + 3).toFixed(1)}%
+• Customer satisfaction improved to ${(Math.random() * 1 + 4).toFixed(1)}/5.0
+
+METHODOLOGY
+The analysis was conducted using advanced statistical methods and industry-standard benchmarking practices.
+
+RECOMMENDATIONS
+1. Continue current optimization strategies
+2. Invest in technology upgrades
+3. Expand successful programs
+4. Address identified improvement areas
+
+CONCLUSION
+The findings indicate positive trends and provide a foundation for strategic decision-making moving forward.`,
+    }
+
+    // Determine document type based on filename
+    const lowerName = fileName.toLowerCase()
+    if (lowerName.includes("contract") || lowerName.includes("agreement")) {
+      return documentTypes.contract
+    } else if (lowerName.includes("report") || lowerName.includes("analysis")) {
+      return documentTypes.report
+    } else {
+      return documentTypes.business
+    }
   }
 
   private static generateGenericText(fileName: string): string {

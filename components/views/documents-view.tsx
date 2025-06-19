@@ -31,6 +31,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DocumentStore } from "../../store/document-store"
 import { OCRService } from "../../services/ocr-service"
 import type { AppState, Document } from "../../types"
+import { DocumentViewerModal } from "../document-viewer-modal"
 
 interface DocumentsViewProps {
   state: AppState
@@ -45,6 +46,7 @@ export function DocumentsView({ state }: DocumentsViewProps) {
   const [processingFiles, setProcessingFiles] = useState<Map<string, { progress: number; status: string }>>(new Map())
   const [newTags, setNewTags] = useState<string>("")
   const [dragActive, setDragActive] = useState(false)
+  const [viewingDocument, setViewingDocument] = useState<Document | null>(null)
 
   // Initialize OCR service on component mount
   useEffect(() => {
@@ -449,7 +451,7 @@ export function DocumentsView({ state }: DocumentsViewProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setViewingDocument(doc)}>
                           <Eye className="h-4 w-4 mr-2" />
                           View
                         </DropdownMenuItem>
@@ -502,6 +504,8 @@ export function DocumentsView({ state }: DocumentsViewProps) {
             ))}
           </div>
         )}
+        {/* Document Viewer Modal */}
+        <DocumentViewerModal document={viewingDocument} onClose={() => setViewingDocument(null)} />
       </div>
     </div>
   )

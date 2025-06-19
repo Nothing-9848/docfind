@@ -1,23 +1,40 @@
 "use client"
 
 import dynamic from "next/dynamic"
+import { useState, useEffect } from "react"
 
-// Dynamically import the component to avoid SSR issues
-const DocumentManagementApp = dynamic(
-  () => import("@/components/document-management-app").then((mod) => ({ default: mod.DocumentManagementApp })),
+const NotionLayout = dynamic(
+  () => import("../components/notion-layout").then((mod) => ({ default: mod.NotionLayout })),
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-screen bg-gray-50 items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading Document Management System...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading DocuFlow Pro...</p>
         </div>
       </div>
     ),
   },
 )
 
-export default function Home() {
-  return <DocumentManagementApp />
+export default function Page() {
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  if (!isClient) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return <NotionLayout />
 }

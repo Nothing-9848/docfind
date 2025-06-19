@@ -2,7 +2,7 @@ export interface Document {
   id: string
   name: string
   originalName: string
-  type: "pdf" | "image" | "text" | "doc"
+  type: "pdf" | "doc" | "image" | "text"
   size: number
   content: string
   ocrText: string
@@ -10,9 +10,10 @@ export interface Document {
   folderId: string | null
   createdAt: Date
   updatedAt: Date
-  thumbnail?: string
   isProcessing: boolean
   processingProgress: number
+  url?: string
+  language?: string // OCR language
 }
 
 export interface Folder {
@@ -35,13 +36,13 @@ export interface Tag {
   documentCount: number
 }
 
-export interface SearchResult {
-  document: Document
-  matches: {
-    field: "name" | "content" | "ocrText" | "tags"
-    text: string
-    highlight: string
-  }[]
+export interface SearchIndex {
+  id: string
+  documentId: string
+  term: string
+  frequency: number
+  position: number[]
+  language: string
 }
 
 export interface AppState {
@@ -52,4 +53,16 @@ export interface AppState {
   selectedFolder: string | null
   searchQuery: string
   isProcessing: boolean
+  settings: {
+    ocrLanguages: string[]
+    defaultLanguage: string
+    storageLocation: string
+    autoBackup: boolean
+  }
+}
+
+export interface OCRLanguage {
+  code: string
+  name: string
+  nativeName: string
 }

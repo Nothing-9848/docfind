@@ -3,7 +3,7 @@
 import { EnhancedDashboard } from "./views/enhanced-dashboard"
 import { EnhancedDocumentsView } from "./views/enhanced-documents-view"
 import { EnhancedSearchView } from "./views/enhanced-search-view"
-import { EnhancedSettingsView } from "./views/enhanced-settings-view"
+import { SettingsView } from "./views/enhanced-settings-view"
 import { TagsView } from "./views/tags-view"
 import { FoldersView } from "./views/folders-view"
 import type { AppState } from "../types"
@@ -27,7 +27,10 @@ export function MainContent({ state, updateState }: MainContentProps) {
       case "search":
         return <EnhancedSearchView state={state} updateState={updateState} />
       case "settings":
-        return <EnhancedSettingsView state={state} updateState={updateState} />
+      case "languages":
+      case "database":
+      case "storage":
+        return <SettingsView state={state} updateState={updateState} activeTab={state.currentView} />
       default:
         return <EnhancedDashboard state={state} updateState={updateState} />
     }

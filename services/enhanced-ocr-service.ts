@@ -1,6 +1,7 @@
 import type { OCRLanguage } from "../types"
 
 export class EnhancedOCRService {
+  private static isInitialized = false
   private static supportedLanguages: OCRLanguage[] = [
     { code: "eng", name: "English", nativeName: "English" },
     { code: "hin", name: "Hindi", nativeName: "हिन्दी" },
@@ -11,79 +12,138 @@ export class EnhancedOCRService {
     { code: "ita", name: "Italian", nativeName: "Italiano" },
     { code: "por", name: "Portuguese", nativeName: "Português" },
     { code: "rus", name: "Russian", nativeName: "Русский" },
-    { code: "jpn", name: "Japanese", nativeName: "日本語" },
-    { code: "kor", name: "Korean", nativeName: "한국어" },
-    { code: "chi_sim", name: "Chinese Simplified", nativeName: "简体中文" },
-    { code: "chi_tra", name: "Chinese Traditional", nativeName: "繁體中文" },
     { code: "ara", name: "Arabic", nativeName: "العربية" },
+    { code: "chi_sim", name: "Chinese (Simplified)", nativeName: "简体中文" },
+    { code: "jpn", name: "Japanese", nativeName: "日本語" },
   ]
 
-  static getSupportedLanguages(): OCRLanguage[] {
-    return this.supportedLanguages
+  static async initialize(): Promise<void> {
+    if (this.isInitialized) return
+
+    try {
+      // Simulate OCR engine initialization
+      console.log("Initializing Enhanced OCR Service...")
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      this.isInitialized = true
+      console.log("Enhanced OCR Service initialized successfully")
+    } catch (error) {
+      console.error("Failed to initialize OCR service:", error)
+      throw error
+    }
   }
 
-  static async processDocument(
+  static getSupportedLanguages(): OCRLanguage[] {
+    return [...this.supportedLanguages]
+  }
+
+  static async processFile(
     file: File,
-    languages: string[] = ["eng"],
+    language = "eng",
     onProgress?: (progress: number) => void,
   ): Promise<{ text: string; confidence: number }> {
-    // Simulate OCR processing with realistic text based on language
-    return new Promise((resolve) => {
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 20
-        if (onProgress) onProgress(Math.min(progress, 90))
+    if (!this.isInitialized) {
+      await this.initialize()
+    }
 
-        if (progress >= 90) {
-          clearInterval(interval)
-          if (onProgress) onProgress(100)
+    try {
+      // Simulate processing progress
+      const steps = 10
+      for (let i = 0; i <= steps; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        onProgress?.(Math.round((i / steps) * 100))
+      }
 
-          // Generate realistic text based on primary language
-          const primaryLang = languages[0] || "eng"
-          const text = this.generateRealisticText(file.name, primaryLang)
+      // Generate realistic OCR text based on file type and language
+      const ocrText = await this.generateRealisticOCRText(file, language)
+      const confidence = Math.random() * 0.3 + 0.7 // 70-100% confidence
 
-          resolve({
-            text,
-            confidence: 0.85 + Math.random() * 0.1, // 85-95% confidence
-          })
-        }
-      }, 200)
-    })
+      return {
+        text: ocrText,
+        confidence: Math.round(confidence * 100) / 100,
+      }
+    } catch (error) {
+      console.error("OCR processing failed:", error)
+      throw new Error(`OCR processing failed: ${error}`)
+    }
   }
 
-  private static generateRealisticText(filename: string, language: string): string {
-    const templates = {
-      eng: {
-        business: `BUSINESS DOCUMENT
+  private static async generateRealisticOCRText(file: File, language: string): Promise<string> {
+    const fileName = file.name.toLowerCase()
+    const fileType = file.type
 
-This document contains important business information and strategic planning details. The quarterly report shows significant growth in revenue and market expansion opportunities.
+    // Generate content based on file type and language
+    if (fileType.includes("pdf") || fileName.includes("invoice")) {
+      return this.generateInvoiceText(language)
+    } else if (fileName.includes("contract") || fileName.includes("agreement")) {
+      return this.generateContractText(language)
+    } else if (fileName.includes("report") || fileName.includes("business")) {
+      return this.generateBusinessReportText(language)
+    } else if (fileName.includes("letter") || fileName.includes("correspondence")) {
+      return this.generateLetterText(language)
+    } else {
+      return this.generateGenericDocumentText(language)
+    }
+  }
 
-Key Performance Indicators:
-• Revenue Growth: 25%
-• Customer Acquisition: 1,200 new clients
-• Market Share: 15% increase
-• Operational Efficiency: 30% improvement
+  private static generateInvoiceText(language: string): string {
+    switch (language) {
+      case "hin":
+        return `चालान #INV-2024-001
 
-Strategic Objectives for Next Quarter:
-1. Expand into emerging markets
-2. Launch new product lines
-3. Enhance customer experience
-4. Implement digital transformation initiatives
+दिनांक: 15 जनवरी, 2024
+देय तिथि: 15 फरवरी, 2024
 
-Financial Summary:
-Total Revenue: $2,500,000
-Operating Expenses: $1,800,000
-Net Profit: $700,000
-ROI: 28%
+बिल प्राप्तकर्ता:
+एबीसी कॉर्पोरेशन
+123 व्यापार मार्ग
+सूट 100
+नई दिल्ली, 110001
 
-This confidential document is intended for internal use only.`,
+विवरण                    मात्रा    दर        राशि
+व्यावसायिक सेवाएं           40    ₹10,000   ₹4,00,000
+परामर्श घंटे               20    ₹12,000   ₹2,40,000
+सॉफ्टवेयर लाइसेंस           1    ₹40,000   ₹40,000
+                                        __________
+                              उप-योग:  ₹6,80,000
+                              कर (18%): ₹1,22,400
+                              कुल:     ₹8,02,400
 
-        invoice: `INVOICE #INV-2024-${Math.floor(Math.random() * 1000)
-          .toString()
-          .padStart(3, "0")}
+भुगतान की शर्तें: 30 दिन नेट
+भुगतान के तरीके: चेक, वायर ट्रांसफर, UPI
 
-Date: ${new Date().toLocaleDateString()}
-Due Date: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+आपके व्यापार के लिए धन्यवाद!`
+
+      case "tel":
+        return `బిల్లు #INV-2024-001
+
+తేదీ: జనవరి 15, 2024
+చెల్లింపు తేదీ: ఫిబ్రవరి 15, 2024
+
+బిల్లు చేయబడిన వ్యక్తి:
+ABC కార్పొరేషన్
+123 వ్యాపార మార్గం
+సూట్ 100
+హైదరాబాద్, 500001
+
+వివరణ                    పరిమాణం   రేటు      మొత్తం
+వృత్తిపరమైన సేవలు          40    ₹10,000   ₹4,00,000
+సలహా గంటలు               20    ₹12,000   ₹2,40,000
+సాఫ్ట్‌వేర్ లైసెన్స్         1    ₹40,000   ₹40,000
+                                        __________
+                              ఉప మొత్తం: ₹6,80,000
+                              పన్ను (18%): ₹1,22,400
+                              మొత్తం:     ₹8,02,400
+
+చెల్లింపు నిబంధనలు: 30 రోజుల నెట్
+చెల్లింపు పద్ధతులు: చెక్, వైర్ బదిలీ, UPI
+
+మీ వ్యాపారానికి ధన్యవాదాలు!`
+
+      default:
+        return `INVOICE #INV-2024-001
+
+Date: January 15, 2024
+Due Date: February 15, 2024
 
 Bill To:
 ABC Corporation
@@ -95,127 +155,249 @@ Description                    Qty    Rate      Amount
 Professional Services           40    $125.00   $5,000.00
 Consulting Hours               20    $150.00   $3,000.00
 Software License                1    $500.00     $500.00
-                                              __________
-                                    Subtotal:  $8,500.00
-                                    Tax (8%):    $680.00
-                                    Total:     $9,180.00
+                                            __________
+                                  Subtotal:  $8,500.00
+                                  Tax (8%):    $680.00
+                                  Total:     $9,180.00
 
 Payment Terms: Net 30 days
-Thank you for your business!`,
+Payment Methods: Check, Wire Transfer, ACH
 
-        contract: `SERVICE AGREEMENT
-
-This Service Agreement ("Agreement") is entered into on ${new Date().toLocaleDateString()} between the parties for the provision of professional services.
-
-TERMS AND CONDITIONS:
-
-1. SCOPE OF SERVICES
-The service provider agrees to deliver the following services:
-- Consulting and advisory services
-- Technical implementation support
-- Project management and coordination
-- Quality assurance and testing
-
-2. PAYMENT TERMS
-- Total contract value: $50,000
-- Payment schedule: Monthly installments
-- Late payment fee: 1.5% per month
-- Currency: USD
-
-3. DELIVERABLES
-All deliverables will be provided according to the agreed timeline and specifications outlined in the project scope document.
-
-4. CONFIDENTIALITY
-Both parties agree to maintain strict confidentiality regarding all proprietary information shared during the course of this agreement.
-
-This agreement is governed by the laws of the jurisdiction specified herein.`,
-      },
-
-      hin: `व्यावसायिक दस्तावेज़
-
-यह दस्तावेज़ महत्वपूर्ण व्यावसायिक जानकारी और रणनीतिक योजना विवरण शामिल करता है। त्रैमासिक रिपोर्ट राजस्व में महत्वपूर्ण वृद्धि और बाज़ार विस्तार के अवसर दिखाती है।
-
-मुख्य प्रदर्शन संकेतक:
-• राजस्व वृद्धि: 25%
-• ग्राहक अधिग्रहण: 1,200 नए ग्राहक
-• बाज़ार हिस्सेदारी: 15% वृद्धि
-• परिचालन दक्षता: 30% सुधार
-
-अगली तिमाही के लिए रणनीतिक उद्देश्य:
-1. उभरते बाज़ारों में विस्तार
-2. नई उत्पाद श्रृंखला लॉन्च करना
-3. ग्राहक अनुभव में सुधार
-4. डिजिटल परिवर्तन पहल लागू करना
-
-वित्तीय सारांश:
-कुल राजस्व: $25,00,000
-परिचालन व्यय: $18,00,000
-शुद्ध लाभ: $7,00,000
-ROI: 28%
-
-यह गोपनीय दस्तावेज़ केवल आंतरिक उपयोग के लिए है।`,
-
-      tel: `వ్యాపార పత్రం
-
-ఈ పత్రంలో ముఖ్యమైన వ్యాపార సమాచారం మరియు వ్యూహాత్మక ప్రణాళిక వివరాలు ఉన్నాయి. త్రైమాసిక నివేదిక ఆదాయంలో గణనీయమైన వృద్ధి మరియు మార్కెట్ విస్తరణ అవకాశాలను చూపిస్తుంది।
-
-ముఖ్య పనితీరు సూచికలు:
-• ఆదాయ వృద్ధి: 25%
-• కస్టమర్ సేకరణ: 1,200 కొత్త క్లయింట్లు
-• మార్కెట్ వాటా: 15% పెరుగుదల
-• కార్యాచరణ సామర్థ్యం: 30% మెరుగుదల
-
-తదుపరి త్రైమాసికానికి వ్యూహాత్మక లక్ష్యాలు:
-1. అభివృద్ధి చెందుతున్న మార్కెట్లలోకి విస్తరణ
-2. కొత్త ఉత్పత్తి శ్రేణులను ప్రారంభించడం
-3. కస్టమర్ అనుభవాన్ని మెరుగుపరచడం
-4. డిజిటల్ పరివర్తన కార్యక్రమాలను అమలు చేయడం
-
-ఆర్థిక సారాంశం:
-మొత్తం ఆదాయం: $25,00,000
-నిర్వహణ ఖర్చులు: $18,00,000
-నికర లాభం: $7,00,000
-ROI: 28%
-
-ఈ గోప్య పత్రం అంతర్గత వినియోగం కోసం మాత్రమే.`,
+Thank you for your business!`
     }
+  }
 
-    // Determine document type from filename
-    const lowerFilename = filename.toLowerCase()
-    let docType = "business"
+  private static generateContractText(language: string): string {
+    switch (language) {
+      case "hin":
+        return `सेवा समझौता
 
-    if (lowerFilename.includes("invoice") || lowerFilename.includes("bill")) {
-      docType = "invoice"
-    } else if (lowerFilename.includes("contract") || lowerFilename.includes("agreement")) {
-      docType = "contract"
+यह समझौता आज दिनांक _______ को निम्नलिखित पक्षों के बीच किया जा रहा है:
+
+पक्ष A: [कंपनी का नाम]
+पक्ष B: [ग्राहक का नाम]
+
+सेवा की शर्तें:
+1. सेवा प्रदाता उच्च गुणवत्ता की सेवाएं प्रदान करेगा
+2. भुगतान 30 दिनों के भीतर किया जाएगा
+3. गोपनीयता बनाए रखी जाएगी
+
+यह समझौता दोनों पक्षों के लिए बाध्यकारी है।
+
+हस्ताक्षर: ________________
+दिनांक: ________________`
+
+      case "tel":
+        return `సేవా ఒప్పందం
+
+ఈ ఒప్పందం ఈ రోజు తేదీ _______ న క్రింది పార్టీల మధ్య చేయబడుతోంది:
+
+పార్టీ A: [కంపెనీ పేరు]
+పార్టీ B: [కస్టమర్ పేరు]
+
+సేవా నిబంధనలు:
+1. సేవా ప్రదాత అధిక నాణ్యత సేవలను అందిస్తారు
+2. చెల్లింపు 30 రోజులలో చేయబడుతుంది
+3. గోప్యత నిర్వహించబడుతుంది
+
+ఈ ఒప్పందం రెండు పార్టీలకు కట్టుబడి ఉంటుంది।
+
+సంతకం: ________________
+తేదీ: ________________`
+
+      default:
+        return `SERVICE AGREEMENT
+
+This agreement is made on _______ between the following parties:
+
+Party A: [Company Name]
+Party B: [Client Name]
+
+Terms of Service:
+1. Service provider will deliver high-quality services
+2. Payment will be made within 30 days
+3. Confidentiality will be maintained
+
+This agreement is binding for both parties.
+
+Signature: ________________
+Date: ________________`
     }
+  }
 
-    // Get template for language and document type
-    const langTemplates = templates[language as keyof typeof templates] || templates.eng
-    return langTemplates[docType as keyof typeof langTemplates] || langTemplates.business
+  private static generateBusinessReportText(language: string): string {
+    switch (language) {
+      case "hin":
+        return `व्यापारिक रिपोर्ट 2024
+
+कार्यकारी सारांश:
+इस वर्ष हमारी कंपनी ने उत्कृष्ट प्रदर्शन किया है। बिक्री में 25% की वृद्धि हुई है और लाभ में 30% की वृद्धि हुई है।
+
+मुख्य उपलब्धियां:
+• नए बाजारों में प्रवेश
+• उत्पाद लाइन का विस्तार
+• ग्राहक संतुष्टि में सुधार
+
+भविष्य की योजनाएं:
+• डिजिटल परिवर्तन
+• अंतर्राष्ट्रीय विस्तार
+• नवाचार में निवेश
+
+यह रिपोर्ट गोपनीय जानकारी है।`
+
+      case "tel":
+        return `వ్యాపార నివేదిక 2024
+
+కార్యనిర్వాహక సారాంశం:
+ఈ సంవత్సరం మా కంపెనీ అద్భుతమైన పనితీరును చూపించింది. అమ్మకాలలో 25% పెరుగుదల మరియు లాభాలలో 30% పెరుగుదల కనిపించింది.
+
+ముఖ్య విజయాలు:
+• కొత్త మార్కెట్లలో ప్రవేశం
+• ఉత్పత్తి లైన్ విస్తరణ
+• కస్టమర్ సంతృప్తిలో మెరుగుదల
+
+భవిష్యత్ ప్రణాళికలు:
+• డిజిటల్ పరివర్తన
+• అంతర్జాతీయ విస్తరణ
+• ఆవిష్కరణలో పెట్టుబడి
+
+ఈ నివేదిక గోప్య సమాచారం.`
+
+      default:
+        return `BUSINESS REPORT 2024
+
+Executive Summary:
+This year our company has shown excellent performance. Sales increased by 25% and profits grew by 30%.
+
+Key Achievements:
+• Entry into new markets
+• Product line expansion
+• Improved customer satisfaction
+
+Future Plans:
+• Digital transformation
+• International expansion
+• Investment in innovation
+
+This report contains confidential information.`
+    }
+  }
+
+  private static generateLetterText(language: string): string {
+    switch (language) {
+      case "hin":
+        return `प्रिय महोदय/महोदया,
+
+मुझे आपको सूचित करते हुए खुशी हो रही है कि आपका आवेदन स्वीकार कर लिया गया है।
+
+कृपया निम्नलिखित दस्तावेज जमा करें:
+• पहचान प्रमाण
+• पता प्रमाण
+• शैक्षणिक प्रमाणपत्र
+
+अधिक जानकारी के लिए कृपया संपर्क करें।
+
+धन्यवाद,
+[नाम]
+[पद]`
+
+      case "tel":
+        return `ప్రియమైన మహోదయ/మహోదయా,
+
+మీ దరఖాస్తు ఆమోదించబడిందని మీకు తెలియజేయడంలో సంతోషిస్తున్నాను.
+
+దయచేసి క్రింది పత్రాలను సమర్పించండి:
+• గుర్తింపు రుజువు
+• చిరునామా రుజువు
+• విద్యా సర్టిఫికెట్లు
+
+మరింత సమాచారం కోసం దయచేసి సంప్రదించండి.
+
+ధన్యవాదాలు,
+[పేరు]
+[హోదా]`
+
+      default:
+        return `Dear Sir/Madam,
+
+I am pleased to inform you that your application has been accepted.
+
+Please submit the following documents:
+• Identity proof
+• Address proof
+• Educational certificates
+
+Please contact us for more information.
+
+Thank you,
+[Name]
+[Position]`
+    }
+  }
+
+  private static generateGenericDocumentText(language: string): string {
+    switch (language) {
+      case "hin":
+        return `दस्तावेज़ शीर्षक
+
+यह एक नमूना दस्तावेज़ है जो OCR प्रसंस्करण के लिए बनाया गया है। इसमें विभिन्न प्रकार की जानकारी शामिल है।
+
+मुख्य बिंदु:
+• महत्वपूर्ण जानकारी
+• डेटा विश्लेषण
+• निष्कर्ष और सुझाव
+
+यह दस्तावेज़ स्वचालित रूप से संसाधित किया गया है।`
+
+      case "tel":
+        return `పత్రం శీర్షిక
+
+ఇది OCR ప్రాసెసింగ్ కోసం సృష్టించబడిన నమూనా పత్రం. ఇందులో వివిధ రకాల సమాచారం ఉంది.
+
+ముఖ్య అంశాలు:
+• ముఖ్యమైన సమాచారం
+• డేటా విశ్లేషణ
+• తీర్మానాలు మరియు సూచనలు
+
+ఈ పత్రం స్వయంచాలకంగా ప్రాసెస్ చేయబడింది.`
+
+      default:
+        return `Document Title
+
+This is a sample document created for OCR processing. It contains various types of information.
+
+Key Points:
+• Important information
+• Data analysis
+• Conclusions and recommendations
+
+This document has been processed automatically.`
+    }
   }
 
   static async detectLanguage(text: string): Promise<string> {
     // Simple language detection based on character patterns
-    const hindiPattern = /[\u0900-\u097F]/
-    const teluguPattern = /[\u0C00-\u0C7F]/
-    const arabicPattern = /[\u0600-\u06FF]/
-    const chinesePattern = /[\u4E00-\u9FFF]/
-    const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF]/
-    const koreanPattern = /[\uAC00-\uD7AF]/
-
-    if (hindiPattern.test(text)) return "hin"
-    if (teluguPattern.test(text)) return "tel"
-    if (arabicPattern.test(text)) return "ara"
-    if (chinesePattern.test(text)) return "chi_sim"
-    if (japanesePattern.test(text)) return "jpn"
-    if (koreanPattern.test(text)) return "kor"
+    if (/[\u0900-\u097F]/.test(text)) return "hin" // Hindi
+    if (/[\u0C00-\u0C7F]/.test(text)) return "tel" // Telugu
+    if (/[\u4e00-\u9fff]/.test(text)) return "chi_sim" // Chinese
+    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return "jpn" // Japanese
+    if (/[\u0600-\u06ff]/.test(text)) return "ara" // Arabic
+    if (/[\u0400-\u04ff]/.test(text)) return "rus" // Russian
 
     return "eng" // Default to English
   }
 
-  static getLanguageName(code: string): string {
-    const lang = this.supportedLanguages.find((l) => l.code === code)
-    return lang ? lang.nativeName : code
+  static isLanguageSupported(languageCode: string): boolean {
+    return this.supportedLanguages.some((lang) => lang.code === languageCode)
+  }
+
+  static getLanguageName(languageCode: string): string {
+    const language = this.supportedLanguages.find((lang) => lang.code === languageCode)
+    return language ? language.name : "Unknown"
+  }
+
+  static getNativeLanguageName(languageCode: string): string {
+    const language = this.supportedLanguages.find((lang) => lang.code === languageCode)
+    return language ? language.nativeName : "Unknown"
   }
 }

@@ -14,7 +14,7 @@ export class DatabaseService {
   private static db: IDBDatabase | null = null
   private static isInitialized = false
 
-  static async init(): Promise<void> {
+  static async initialize(): Promise<void> {
     if (this.isInitialized && this.db) return
 
     return new Promise((resolve, reject) => {
@@ -232,7 +232,7 @@ export class DatabaseService {
   }
 
   static async saveSettings(settings: any): Promise<void> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["settings"], "readwrite")
@@ -245,7 +245,7 @@ export class DatabaseService {
   }
 
   static async getSettings(): Promise<any> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["settings"], "readonly")
@@ -277,7 +277,7 @@ export class DatabaseService {
   }
 
   static async exportData(): Promise<any> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     const documents = await this.getAllFromStore("documents")
     const folders = await this.getAllFromStore("folders")
@@ -293,7 +293,7 @@ export class DatabaseService {
   }
 
   static async importData(data: any): Promise<void> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     const transaction = this.db!.transaction(["documents", "folders", "settings"], "readwrite")
 
@@ -322,7 +322,7 @@ export class DatabaseService {
   }
 
   static async clearDatabase(): Promise<void> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     await this.clearStore("documents")
     await this.clearStore("folders")
@@ -354,7 +354,7 @@ export class DatabaseService {
 
   // Search indexing methods
   static async indexDocument(document: any): Promise<void> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     const words = this.extractWords(document.ocrText + " " + document.content)
     const transaction = this.db!.transaction(["searchIndex"], "readwrite")
@@ -385,7 +385,7 @@ export class DatabaseService {
   }
 
   static async searchIndex(query: string): Promise<string[]> {
-    if (!this.db) await this.init()
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(["searchIndex"], "readonly")

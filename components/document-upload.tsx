@@ -7,7 +7,7 @@ import { Upload, FileText, ImageIcon, File } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { OCRService } from "../services/ocr-service"
+import { EnhancedOCRService } from "../services/enhanced-ocr-service"
 import { DocumentStore } from "../store/document-store"
 import type { Document } from "../types/document"
 
@@ -35,14 +35,20 @@ export function DocumentUpload({ onUploadComplete }: DocumentUploadProps) {
     setProcessingFiles((prev) => [...prev, fileId])
 
     // Simulate upload progress
-    for (let i = 0; i <= 100; i += 10) {
-      setUploadProgress((prev) => ({ ...prev, [fileId]: i }))
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
+    // for (let i = 0; i <= 100; i += 10) {
+    //   setUploadProgress((prev) => ({ ...prev, [fileId]: i }))
+    //   await new Promise((resolve) => setTimeout(resolve, 100))
+    // }
 
     try {
-      // Process OCR
-      const ocrText = await OCRService.processDocument(file)
+      // Process OCR with progress tracking
+      const ocrResult = await EnhancedOCRService.processDocument(
+        file,
+        "eng", // Default to English, can be made configurable
+        (progress) => {
+          setUploadProgress((prev) => ({ ...prev, [fileId]: progress }))
+        },
+      )
 
       // Create document object
       const document: Document = {
@@ -52,7 +58,7 @@ export function DocumentUpload({ onUploadComplete }: DocumentUploadProps) {
         size: file.size,
         uploadDate: new Date(),
         tags: [],
-        ocrText,
+        ocrText: ocrResult.text,
         url: URL.createObjectURL(file),
         status: "completed",
       }

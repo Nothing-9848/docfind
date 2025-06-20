@@ -43,7 +43,7 @@ This document contains confidential and proprietary information.`,
         updatedAt: new Date("2024-01-15"),
         isProcessing: false,
         processingProgress: 100,
-        url: "/placeholder.svg?height=842&width=595", // PDF placeholder
+        url: "/placeholder.svg?height=842&width=595",
       },
       {
         id: "2",
@@ -82,7 +82,7 @@ Thank you for your business!`,
         updatedAt: new Date("2024-01-10"),
         isProcessing: false,
         processingProgress: 100,
-        url: "/placeholder.svg?height=600&width=800", // Image placeholder
+        url: "/placeholder.svg?height=600&width=800",
       },
     ],
     folders: [
@@ -167,17 +167,22 @@ Thank you for your business!`,
   }
 
   private static notify() {
+    console.log("DocumentStore: Notifying listeners of state change")
+    console.log("Current documents count:", this.state.documents.length)
     this.listeners.forEach((listener) => listener(this.getState()))
   }
 
   static addDocument(document: Omit<Document, "id" | "createdAt" | "updatedAt">) {
     const newDoc: Document = {
       ...document,
-      id: Date.now().toString(),
+      id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
 
+    console.log("DocumentStore: Adding new document:", newDoc)
+
+    // Add to beginning of documents array for recent-first ordering
     this.state.documents.unshift(newDoc)
 
     // Update folder
@@ -185,6 +190,7 @@ Thank you for your business!`,
       const folder = this.state.folders.find((f) => f.id === document.folderId)
       if (folder) {
         folder.documentIds.push(newDoc.id)
+        console.log(`DocumentStore: Added document to folder ${folder.name}`)
       }
     }
 
@@ -195,7 +201,7 @@ Thank you for your business!`,
         existingTag.documentCount++
       } else {
         this.state.tags.push({
-          id: Date.now().toString() + Math.random(),
+          id: `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: tagName,
           color: this.getRandomColor(),
           documentCount: 1,
@@ -203,6 +209,7 @@ Thank you for your business!`,
       }
     })
 
+    console.log("DocumentStore: Document added successfully, notifying listeners")
     this.notify()
     return newDoc
   }
@@ -215,6 +222,7 @@ Thank you for your business!`,
         ...updates,
         updatedAt: new Date(),
       }
+      console.log("DocumentStore: Document updated:", id)
       this.notify()
     }
   }
@@ -242,6 +250,7 @@ Thank you for your business!`,
       })
 
       this.state.documents = this.state.documents.filter((d) => d.id !== id)
+      console.log("DocumentStore: Document deleted:", id)
       this.notify()
     }
   }
@@ -249,7 +258,7 @@ Thank you for your business!`,
   static addFolder(folder: Omit<Folder, "id" | "createdAt">) {
     const newFolder: Folder = {
       ...folder,
-      id: Date.now().toString(),
+      id: `folder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date(),
     }
 

@@ -36,5 +36,5 @@ export function MainContent({ state, updateState }: MainContentProps) {
     }
   }
 
-  return <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">{renderCurrentView()}</div>
+  return <div className="flex-1 flex flex-col bg-white overflow-hidden">{renderCurrentView()}</div>
 }

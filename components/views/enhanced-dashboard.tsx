@@ -1,30 +1,25 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   FileText,
-  FolderOpen,
-  Tags,
   Upload,
-  TrendingUp,
-  Clock,
-  HardDrive,
-  Languages,
   Search,
-  Eye,
+  Settings,
+  Plus,
   MoreHorizontal,
-  Activity,
-  Database,
-  Zap,
-  RefreshCw,
+  Calendar,
+  Clock,
+  Hash,
+  Folder,
+  Eye,
+  Download,
 } from "lucide-react"
+import { DocumentUpload } from "../document-upload"
 import type { AppState, Document } from "../../types"
-import { DocumentStore } from "../../store/document-store"
 
 interface DashboardProps {
   state: AppState
@@ -32,351 +27,283 @@ interface DashboardProps {
 }
 
 export function EnhancedDashboard({ state, updateState }: DashboardProps) {
-  const [storageUsage, setStorageUsage] = useState({ used: 0, quota: 100 * 1024 * 1024 }) // 100MB quota
-  const [recentActivity, setRecentActivity] = useState<Document[]>([])
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const [recentDocuments, setRecentDocuments] = useState<Document[]>([])
 
-  // Subscribe to store changes and update recent activity
   useEffect(() => {
-    const updateRecentActivity = () => {
-      const recent = [...state.documents].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 5)
-      setRecentActivity(recent)
-
-      // Calculate storage usage
-      const totalSize = state.documents.reduce((acc, doc) => acc + doc.size, 0)
-      setStorageUsage((prev) => ({ ...prev, used: totalSize }))
-
-      console.log("Dashboard: Updated recent activity", recent.length, "documents")
-    }
-
-    // Initial load
-    updateRecentActivity()
-
-    // Subscribe to store changes
-    const unsubscribe = DocumentStore.subscribe((newState) => {
-      console.log("Dashboard: Store updated, refreshing data")
-      updateRecentActivity()
-    })
-
-    return unsubscribe
+    // Update recent documents when state changes
+    const recent = [...state.documents]
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 6)
+    setRecentDocuments(recent)
+    console.log("Dashboard: Updated recent documents", recent.length)
   }, [state.documents])
-
-  const totalDocuments = state.documents.length
-  const totalFolders = state.folders.length - 1 // Exclude root folder
-  const totalTags = state.tags.length
-  const processingDocuments = state.documents.filter((doc) => doc.isProcessing).length
-
-  const storagePercentage = storageUsage.quota > 0 ? (storageUsage.used / storageUsage.quota) * 100 : 0
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB"]
+    const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
-  const getDocumentIcon = (doc: Document) => {
-    switch (doc.type) {
+  const getDocumentIcon = (type: string) => {
+    switch (type) {
       case "pdf":
-        return <FileText className="h-4 w-4 text-red-500" />
+        return "📄"
       case "image":
-        return <FileText className="h-4 w-4 text-green-500" />
+        return "🖼️"
+      case "doc":
+        return "📝"
       default:
-        return <FileText className="h-4 w-4 text-blue-500" />
+        return "📄"
     }
-  }
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    // Simulate refresh
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsRefreshing(false)
   }
 
   const quickActions = [
     {
-      title: "Upload Documents",
-      description: "Add new documents with OCR processing",
       icon: Upload,
-      action: () => updateState({ currentView: "documents" }),
-      color: "bg-blue-500",
+      title: "Upload Documents",
+      description: "Add files with OCR processing",
+      action: () => setShowUpload(true),
     },
     {
-      title: "Advanced Search",
-      description: "Search across all documents and OCR text",
       icon: Search,
+      title: "Search Documents",
+      description: "Find documents quickly",
       action: () => updateState({ currentView: "search" }),
-      color: "bg-green-500",
     },
     {
-      title: "Manage Folders",
-      description: "Organize your document structure",
-      icon: FolderOpen,
+      icon: Folder,
+      title: "Organize Folders",
+      description: "Manage your structure",
       action: () => updateState({ currentView: "folders" }),
-      color: "bg-purple-500",
     },
     {
-      title: "OCR Settings",
-      description: "Configure language and processing options",
-      icon: Languages,
+      icon: Settings,
+      title: "Settings",
+      description: "Configure OCR & storage",
       action: () => updateState({ currentView: "settings" }),
-      color: "bg-orange-500",
     },
   ]
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-8 space-y-8">
-        {/* Header */}
+    <div className="h-full bg-white">
+      {/* Header */}
+      <div className="border-b border-gray-200 px-8 py-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Dashboard</h1>
-            <p className="text-lg text-gray-600">Welcome back! Here's your document overview.</p>
+            <h1 className="text-2xl font-semibold text-gray-900 mb-1">Good morning! 👋</h1>
+            <p className="text-gray-600">Here's what's happening with your documents today.</p>
           </div>
-          <div className="flex items-center space-x-3">
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Badge variant="secondary" className="px-3 py-1">
-              <Activity className="h-3 w-3 mr-1" />
-              {processingDocuments} Processing
-            </Badge>
-            <Badge variant="outline" className="px-3 py-1">
-              <Database className="h-3 w-3 mr-1" />
-              {state.settings?.storageLocation || "browser"}
-            </Badge>
-          </div>
+          <Button onClick={() => setShowUpload(true)} className="bg-blue-600 hover:bg-blue-700 h-9 px-4">
+            <Plus className="h-4 w-4 mr-2" />
+            New
+          </Button>
         </div>
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Documents</p>
-                  <p className="text-3xl font-bold text-gray-900">{totalDocuments}</p>
-                  <p className="text-sm text-green-600 mt-1">
-                    <TrendingUp className="h-3 w-3 inline mr-1" />
-                    Recently uploaded
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-blue-600" />
-                </div>
+      <ScrollArea className="h-full">
+        <div className="p-8 space-y-8">
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600">Documents</span>
+                <FileText className="h-4 w-4 text-gray-400" />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Folders</p>
-                  <p className="text-3xl font-bold text-gray-900">{totalFolders}</p>
-                  <p className="text-sm text-blue-600 mt-1">
-                    <FolderOpen className="h-3 w-3 inline mr-1" />
-                    {state.folders.filter((f) => f.isWatched).length} watched
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <FolderOpen className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Tags</p>
-                  <p className="text-3xl font-bold text-gray-900">{totalTags}</p>
-                  <p className="text-sm text-purple-600 mt-1">
-                    <Tags className="h-3 w-3 inline mr-1" />
-                    Organized content
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Tags className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">OCR Languages</p>
-                  <p className="text-3xl font-bold text-gray-900">{state.settings?.ocrLanguages?.length || 0}</p>
-                  <p className="text-sm text-orange-600 mt-1">
-                    <Languages className="h-3 w-3 inline mr-1" />
-                    Multi-language support
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <Languages className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Storage Usage */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <HardDrive className="h-5 w-5 mr-2" />
-              Storage Usage
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span>Used: {formatBytes(storageUsage.used)}</span>
-                <span>Available: {formatBytes(storageUsage.quota - storageUsage.used)}</span>
-              </div>
-              <Progress value={storagePercentage} className="h-2" />
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>Storage Location: {state.settings?.storageLocation || "browser"}</span>
-                <span>{storagePercentage.toFixed(1)}% used</span>
-              </div>
+              <div className="text-2xl font-semibold text-gray-900">{state.documents.length}</div>
+              <div className="text-xs text-gray-500">Total files</div>
             </div>
-          </CardContent>
-        </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600">Storage</span>
+                <Folder className="h-4 w-4 text-gray-400" />
+              </div>
+              <div className="text-2xl font-semibold text-gray-900">
+                {formatBytes(state.documents.reduce((acc, doc) => acc + doc.size, 0))}
+              </div>
+              <div className="text-xs text-gray-500">Used space</div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600">Tags</span>
+                <Hash className="h-4 w-4 text-gray-400" />
+              </div>
+              <div className="text-2xl font-semibold text-gray-900">{state.tags.length}</div>
+              <div className="text-xs text-gray-500">Categories</div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600">Recent</span>
+                <Clock className="h-4 w-4 text-gray-400" />
+              </div>
+              <div className="text-2xl font-semibold text-gray-900">
+                {
+                  state.documents.filter((doc) => {
+                    const dayAgo = new Date()
+                    dayAgo.setDate(dayAgo.getDate() - 1)
+                    return new Date(doc.updatedAt) > dayAgo
+                  }).length
+                }
+              </div>
+              <div className="text-xs text-gray-500">Last 24h</div>
+            </div>
+          </div>
+
           {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Zap className="h-5 w-5 mr-2" />
-                Quick Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-3">
-                {quickActions.map((action, index) => (
-                  <Button
-                    key={index}
-                    variant="ghost"
-                    className="h-auto p-4 justify-start hover:bg-gray-50"
-                    onClick={action.action}
-                  >
-                    <div className={`w-10 h-10 ${action.color} rounded-lg flex items-center justify-center mr-4`}>
-                      <action.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">{action.title}</p>
-                      <p className="text-sm text-gray-500">{action.description}</p>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Clock className="h-5 w-5 mr-2" />
-                  Recent Activity
-                </div>
-                <Badge variant="secondary">{recentActivity.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {recentActivity.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No recent activity</p>
-                    <p className="text-sm">Upload some documents to get started</p>
-                    <Button className="mt-4" onClick={() => updateState({ currentView: "documents" })}>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Documents
-                    </Button>
-                  </div>
-                ) : (
-                  recentActivity.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-                      onClick={() => updateState({ currentView: "documents" })}
-                    >
-                      {getDocumentIcon(doc)}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{doc.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {doc.updatedAt.toLocaleDateString()} • {formatBytes(doc.size)}
-                          {doc.tags.length > 0 && ` • ${doc.tags.slice(0, 2).join(", ")}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            updateState({ currentView: "documents" })
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Popular Tags */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Tags className="h-5 w-5 mr-2" />
-              Popular Tags
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {state.tags.slice(0, 12).map((tag) => (
-                <Button
-                  key={tag.id}
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => {
-                    updateState({
-                      searchQuery: `tag:${tag.name}`,
-                      currentView: "search",
-                    })
-                  }}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {quickActions.map((action, index) => (
+                <button
+                  key={index}
+                  onClick={action.action}
+                  className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all text-left group"
                 >
-                  <div className={`w-2 h-2 rounded-full bg-${tag.color}-500 mr-2`} />
-                  {tag.name}
-                  <Badge variant="secondary" className="ml-2 h-4 text-xs">
-                    {tag.documentCount}
-                  </Badge>
-                </Button>
+                  <action.icon className="h-8 w-8 text-gray-400 group-hover:text-gray-600 mb-3" />
+                  <h3 className="font-medium text-gray-900 mb-1">{action.title}</h3>
+                  <p className="text-sm text-gray-500">{action.description}</p>
+                </button>
               ))}
-              {state.tags.length === 0 && (
-                <p className="text-sm text-gray-500">No tags yet. Upload documents to create tags automatically.</p>
+            </div>
+          </div>
+
+          {/* Recent Documents */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Recent Documents</h2>
+              {recentDocuments.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateState({ currentView: "documents" })}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  View all
+                </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </ScrollArea>
+
+            {recentDocuments.length === 0 ? (
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-12 text-center">
+                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No documents yet</h3>
+                <p className="text-gray-500 mb-6">Upload your first document to get started with OCR processing</p>
+                <Button onClick={() => setShowUpload(true)} className="bg-blue-600 hover:bg-blue-700">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Documents
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer group"
+                    onClick={() => updateState({ currentView: "documents" })}
+                  >
+                    <div className="text-2xl">{getDocumentIcon(doc.type)}</div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 truncate">{doc.name}</h3>
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Calendar className="h-3 w-3" />
+                        <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
+                        <span>•</span>
+                        <span>{formatBytes(doc.size)}</span>
+                        <span>•</span>
+                        <span className="uppercase text-xs">{doc.type}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {doc.tags.slice(0, 2).map((tag) => (
+                        <Badge key={tag} variant="secondary" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {doc.tags.length > 2 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{doc.tags.length - 2}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Popular Tags */}
+          {state.tags.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Popular Tags</h2>
+              <div className="flex flex-wrap gap-2">
+                {state.tags
+                  .sort((a, b) => b.documentCount - a.documentCount)
+                  .slice(0, 10)
+                  .map((tag) => (
+                    <button
+                      key={tag.id}
+                      onClick={() => {
+                        updateState({
+                          searchQuery: `tag:${tag.name}`,
+                          currentView: "search",
+                        })
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                    >
+                      <Hash className="h-3 w-3" />
+                      {tag.name}
+                      <span className="text-xs text-gray-500">({tag.documentCount})</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Upload Modal */}
+      {showUpload && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Upload Documents</h2>
+                <Button variant="ghost" size="sm" onClick={() => setShowUpload(false)}>
+                  ×
+                </Button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <DocumentUpload
+                onUploadComplete={(doc) => {
+                  console.log("Dashboard: Document uploaded:", doc)
+                  // The store will automatically notify and update the state
+                }}
+                onClose={() => setShowUpload(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

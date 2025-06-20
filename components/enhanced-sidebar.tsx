@@ -4,20 +4,19 @@ import { useState } from "react"
 import {
   Home,
   FileText,
-  Folder,
-  Tags,
   Search,
   Settings,
   Plus,
   ChevronRight,
   ChevronDown,
-  Database,
-  HardDrive,
-  Cloud,
+  Hash,
+  Folder,
+  Upload,
+  MoreHorizontal,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import type { AppState } from "../types"
 
 interface SidebarProps {
@@ -27,6 +26,7 @@ interface SidebarProps {
 
 export function Sidebar({ state, updateState }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["root"]))
+  const [searchFocused, setSearchFocused] = useState(false)
 
   const toggleFolder = (folderId: string) => {
     const newExpanded = new Set(expandedFolders)
@@ -40,24 +40,25 @@ export function Sidebar({ state, updateState }: SidebarProps) {
 
   const renderFolder = (folderId: string, level = 0) => {
     const folder = state.folders.find((f) => f.id === folderId)
-    if (!folder) return null
+    if (!folder || folder.id === "root") return null
 
     const isExpanded = expandedFolders.has(folderId)
     const hasChildren = folder.children.length > 0
     const documentCount = folder.documentIds.length
+    const isSelected = state.selectedFolder === folderId
 
     return (
       <div key={folderId}>
         <div
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
-            state.selectedFolder === folderId ? "bg-blue-50 text-blue-700" : ""
+          className={`group flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer hover:bg-gray-100 transition-colors text-sm ${
+            isSelected ? "bg-gray-100" : ""
           }`}
-          style={{ paddingLeft: `${12 + level * 16}px` }}
+          style={{ paddingLeft: `${8 + level * 16}px` }}
           onClick={() => {
             updateState({ selectedFolder: folderId, currentView: "folders" })
           }}
         >
-          {hasChildren && (
+          {hasChildren ? (
             <button
               onClick={(e) => {
                 e.stopPropagation()
@@ -67,17 +68,22 @@ export function Sidebar({ state, updateState }: SidebarProps) {
             >
               {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             </button>
+          ) : (
+            <div className="w-4" />
           )}
-          {!hasChildren && <div className="w-4" />}
 
-          <Folder className={`h-4 w-4 text-${folder.color}-500`} />
-          <span className="flex-1 text-sm font-medium truncate">{folder.name}</span>
+          <Folder className="h-4 w-4 text-gray-500 flex-shrink-0" />
+          <span className="flex-1 truncate text-gray-700">{folder.name}</span>
+
           {documentCount > 0 && (
-            <Badge variant="secondary" className="text-xs">
+            <span className="text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
               {documentCount}
-            </Badge>
+            </span>
           )}
-          {folder.isWatched && <div className="w-2 h-2 bg-green-500 rounded-full" title="Watched folder" />}
+
+          <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-gray-200 rounded">
+            <MoreHorizontal className="h-3 w-3 text-gray-400" />
+          </button>
         </div>
 
         {isExpanded && hasChildren && <div>{folder.children.map((childId) => renderFolder(childId, level + 1))}</div>}
@@ -85,39 +91,49 @@ export function Sidebar({ state, updateState }: SidebarProps) {
     )
   }
 
-  const getStorageIcon = () => {
-    const storageLocation = state.settings?.storageLocation || "browser"
-    switch (storageLocation) {
-      case "local":
-        return <HardDrive className="h-4 w-4" />
-      case "cloud":
-        return <Cloud className="h-4 w-4" />
-      default:
-        return <Database className="h-4 w-4" />
-    }
-  }
+  const navigationItems = [
+    {
+      icon: Home,
+      label: "Dashboard",
+      id: "dashboard",
+      count: null,
+    },
+    {
+      icon: FileText,
+      label: "All Documents",
+      id: "documents",
+      count: state.documents.length,
+    },
+    {
+      icon: Search,
+      label: "Search",
+      id: "search",
+      count: null,
+    },
+  ]
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className="w-64 h-full flex flex-col bg-gray-50 border-r border-gray-200">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <FileText className="h-5 w-5 text-white" />
+      <div className="p-3 border-b border-gray-200 bg-white">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
+            <FileText className="h-4 w-4 text-white" />
           </div>
-          <div>
-            <h1 className="font-semibold text-gray-900">DocuFlow Pro</h1>
-            <p className="text-xs text-gray-500">Document Management</p>
-          </div>
+          <span className="font-semibold text-gray-900 text-sm">DocuFlow Pro</span>
         </div>
 
-        {/* Quick Search */}
+        {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
           <Input
-            placeholder="Quick search..."
-            className="pl-9 h-8 text-sm"
+            placeholder="Search..."
+            className={`pl-8 h-7 text-xs border-gray-200 transition-all ${
+              searchFocused ? "bg-white shadow-sm" : "bg-gray-50"
+            }`}
             value={state.searchQuery}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             onChange={(e) => {
               updateState({ searchQuery: e.target.value })
               if (e.target.value) {
@@ -128,113 +144,88 @@ export function Sidebar({ state, updateState }: SidebarProps) {
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-3 space-y-1">
-          {/* Main Navigation */}
-          <div className="space-y-1">
-            <Button
-              variant={state.currentView === "dashboard" ? "secondary" : "ghost"}
-              className="w-full justify-start h-8 text-sm"
-              onClick={() => updateState({ currentView: "dashboard" })}
-            >
-              <Home className="h-4 w-4 mr-2" />
-              Dashboard
-            </Button>
-
-            <Button
-              variant={state.currentView === "documents" ? "secondary" : "ghost"}
-              className="w-full justify-start h-8 text-sm"
-              onClick={() => updateState({ currentView: "documents" })}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              All Documents
-              <Badge variant="outline" className="ml-auto text-xs">
-                {state.documents.length}
-              </Badge>
-            </Button>
-
-            <Button
-              variant={state.currentView === "search" ? "secondary" : "ghost"}
-              className="w-full justify-start h-8 text-sm"
-              onClick={() => updateState({ currentView: "search" })}
-            >
-              <Search className="h-4 w-4 mr-2" />
-              Advanced Search
-            </Button>
-
-            <Button
-              variant={state.currentView === "tags" ? "secondary" : "ghost"}
-              className="w-full justify-start h-8 text-sm"
-              onClick={() => updateState({ currentView: "tags" })}
-            >
-              <Tags className="h-4 w-4 mr-2" />
-              Tags
-              <Badge variant="outline" className="ml-auto text-xs">
-                {state.tags.length}
-              </Badge>
-            </Button>
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {/* Navigation */}
+          <div className="space-y-0.5 mb-4">
+            {navigationItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => updateState({ currentView: item.id as any })}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                  state.currentView === item.id
+                    ? "bg-gray-200 text-gray-900"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                <item.icon className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.count !== null && <span className="text-xs text-gray-400">{item.count}</span>}
+              </button>
+            ))}
           </div>
 
-          {/* Folders Section */}
-          <div className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Folders</h3>
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
+          {/* Upload Button */}
+          <Button
+            onClick={() => updateState({ currentView: "documents" })}
+            className="w-full mb-4 h-8 text-xs bg-blue-600 hover:bg-blue-700"
+          >
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Upload
+          </Button>
 
+          {/* Folders */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between px-2 py-1 mb-1">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Folders</span>
+              <button className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-200 rounded">
+                <Plus className="h-3 w-3 text-gray-400" />
+              </button>
+            </div>
             <div className="space-y-0.5">
               {state.folders.filter((f) => f.parentId === "root").map((folder) => renderFolder(folder.id))}
             </div>
           </div>
 
-          {/* Recent Tags */}
-          <div className="pt-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Popular Tags</h3>
-            <div className="flex flex-wrap gap-1">
+          {/* Tags */}
+          <div>
+            <div className="flex items-center justify-between px-2 py-1 mb-1">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Tags</span>
+            </div>
+            <div className="space-y-0.5">
               {state.tags
                 .sort((a, b) => b.documentCount - a.documentCount)
-                .slice(0, 6)
+                .slice(0, 8)
                 .map((tag) => (
-                  <Badge
+                  <button
                     key={tag.id}
-                    variant="outline"
-                    className="text-xs cursor-pointer hover:bg-gray-100"
                     onClick={() => {
                       updateState({
                         searchQuery: `tag:${tag.name}`,
                         currentView: "search",
                       })
                     }}
+                    className="w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
                   >
-                    {tag.name}
-                  </Badge>
+                    <Hash className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                    <span className="flex-1 text-left truncate">{tag.name}</span>
+                    <span className="text-xs text-gray-400">{tag.documentCount}</span>
+                  </button>
                 ))}
             </div>
           </div>
         </div>
-      </div>
+      </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 border-t border-gray-200">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            {getStorageIcon()}
-            <span>Storage: {state.settings?.storageLocation || "Browser"}</span>
-          </div>
-          {state.isProcessing && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />}
-        </div>
-
-        <Button
-          variant="ghost"
-          className="w-full justify-start h-8 text-sm"
+      <div className="p-2 border-t border-gray-200 bg-white">
+        <button
           onClick={() => updateState({ currentView: "settings" })}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
         >
-          <Settings className="h-4 w-4 mr-2" />
-          Settings
-        </Button>
+          <Settings className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1 text-left">Settings</span>
+        </button>
       </div>
     </div>
   )

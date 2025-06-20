@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Sidebar } from "./enhanced-sidebar"
 import { MainContent } from "./enhanced-main-content"
-import { DatabaseService } from "../services/database-service"
+import { DocumentStore } from "../store/document-store"
 import { EnhancedOCRService } from "../services/enhanced-ocr-service"
 import type { AppState } from "../types"
 
@@ -30,26 +30,23 @@ export function NotionLayout() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        await DatabaseService.initialize()
+        // Initialize services
         await EnhancedOCRService.initialize()
 
-        // Load data from database
-        const [documents, folders, tags] = await Promise.all([
-          DatabaseService.getDocuments(),
-          DatabaseService.getFolders(),
-          DatabaseService.getTags(),
-        ])
+        // Get initial state from DocumentStore
+        const storeState = DocumentStore.getState()
+        setState(storeState)
 
-        // Load settings
-        const settings = await DatabaseService.getSettings()
+        // Subscribe to store changes
+        const unsubscribe = DocumentStore.subscribe((newState) => {
+          console.log("NotionLayout: Store updated, new state:", newState)
+          setState(newState)
+        })
 
-        setState((prev) => ({
-          ...prev,
-          documents: documents || [],
-          folders: folders.length > 0 ? folders : prev.folders,
-          tags: tags || [],
-          settings: settings || prev.settings,
-        }))
+        // Cleanup subscription on unmount
+        return () => {
+          unsubscribe()
+        }
       } catch (error) {
         console.error("Failed to initialize app:", error)
       } finally {
@@ -57,33 +54,46 @@ export function NotionLayout() {
       }
     }
 
-    initializeApp()
+    const cleanup = initializeApp()
+    return () => {
+      if (cleanup instanceof Promise) {
+        cleanup.then((fn) => fn && fn())
+      }
+    }
   }, [])
 
   const updateState = (updates: Partial<AppState>) => {
+    console.log("NotionLayout: Updating state:", updates)
+
+    // Update local state immediately for UI responsiveness
     setState((prev) => ({ ...prev, ...updates }))
+
+    // Update store for persistence and other components
+    if (updates.currentView) DocumentStore.setCurrentView(updates.currentView)
+    if (updates.selectedFolder !== undefined) DocumentStore.setSelectedFolder(updates.selectedFolder)
+    if (updates.searchQuery !== undefined) DocumentStore.setSearchQuery(updates.searchQuery)
   }
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
+      <div className="h-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Initializing DocuFlow Pro...</p>
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 text-sm">Loading DocuFlow Pro...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex bg-gray-50 overflow-hidden">
-      {/* Sidebar - Fixed width with internal scrolling */}
-      <div className="flex-shrink-0">
+    <div className="h-screen flex bg-white overflow-hidden">
+      {/* Sidebar - Notion-style */}
+      <div className="flex-shrink-0 border-r border-gray-200">
         <Sidebar state={state} updateState={updateState} />
       </div>
 
-      {/* Main Content - Flexible width with internal scrolling */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content - Notion-style */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
         <MainContent state={state} updateState={updateState} />
       </div>
     </div>

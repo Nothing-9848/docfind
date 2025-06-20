@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { useState, useEffect } from "react"
 import { DatabaseService } from "../services/database-service"
 import { EnhancedOCRService } from "../services/enhanced-ocr-service"
+import { NotionLayout } from "../components/notion-layout"
 
 // Dynamic import to prevent SSR issues
 const DocumentManagementApp = dynamic(
@@ -18,7 +19,7 @@ const DocumentManagementApp = dynamic(
   },
 )
 
-export default function Page() {
+export default function Home() {
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
@@ -39,5 +40,5 @@ export default function Page() {
     )
   }
 
-  return <DocumentManagementApp />
+  return <NotionLayout />
 }

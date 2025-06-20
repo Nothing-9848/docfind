@@ -1,13 +1,12 @@
 "use client"
 
 import type React from "react"
-import { useState, useCallback } from "react"
-import { Upload, FileText, ImageIcon, File, CheckCircle, AlertCircle, X, Play } from "lucide-react"
+import { useState, useCallback, useEffect } from "react"
+import { Upload, FileText, ImageIcon, File, CheckCircle, AlertCircle, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { EnhancedOCRService } from "../services/enhanced-ocr-service"
 import { DocumentStore } from "../store/document-store"
 import type { Document } from "../types"
@@ -15,29 +14,36 @@ import type { Document } from "../types"
 interface DocumentUploadProps {
   onUploadComplete?: (document: Document) => void
   selectedFolderId?: string | null
+  onClose?: () => void
 }
 
-interface StagedFile {
+interface ProcessingFile {
   id: string
-  file: File
   name: string
-  size: number
-  type: string
-  preview?: string
-}
-
-interface ProcessingFile extends StagedFile {
   progress: number
-  status: "waiting" | "processing" | "completed" | "error"
+  status: "uploading" | "processing" | "completed" | "error"
   error?: string
-  ocrResult?: { text: string; language: string; suggestedTags: string[] }
 }
 
-export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentUploadProps) {
+export function DocumentUpload({ onUploadComplete, selectedFolderId, onClose }: DocumentUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([])
   const [processingFiles, setProcessingFiles] = useState<ProcessingFile[]>([])
-  const [isProcessing, setIsProcessing] = useState(false)
+
+  // Auto-close when all files are processed
+  useEffect(() => {
+    if (
+      processingFiles.length > 0 &&
+      processingFiles.every((file) => file.status === "completed" || file.status === "error")
+    ) {
+      const timer = setTimeout(() => {
+        if (onClose) {
+          onClose()
+        }
+      }, 2000) // Auto-close after 2 seconds when all files are done
+
+      return () => clearTimeout(timer)
+    }
+  }, [processingFiles, onClose])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -49,208 +55,181 @@ export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentU
     setIsDragging(false)
   }, [])
 
-  const addFilesToStaging = (files: File[]) => {
-    const newStagedFiles: StagedFile[] = files.map((file) => ({
-      id: `staged_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      file,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-    }))
-
-    setStagedFiles((prev) => [...prev, ...newStagedFiles])
-  }
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-
-    const files = Array.from(e.dataTransfer.files).filter((file) => {
-      const validTypes = [
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/gif",
-        "image/webp",
-        "application/pdf",
-        "text/plain",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ]
-      const maxSize = 10 * 1024 * 1024 // 10MB
-
-      if (!validTypes.includes(file.type)) {
-        alert(`File ${file.name} is not a supported format`)
-        return false
-      }
-
-      if (file.size > maxSize) {
-        alert(`File ${file.name} is too large (max 10MB)`)
-        return false
-      }
-
-      return true
-    })
-
-    if (files.length > 0) {
-      addFilesToStaging(files)
-    }
-  }, [])
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).filter((file) => {
-      const validTypes = [
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/gif",
-        "image/webp",
-        "application/pdf",
-        "text/plain",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ]
-      const maxSize = 10 * 1024 * 1024 // 10MB
-
-      if (!validTypes.includes(file.type)) {
-        alert(`File ${file.name} is not a supported format`)
-        return false
-      }
-
-      if (file.size > maxSize) {
-        alert(`File ${file.name} is too large (max 10MB)`)
-        return false
-      }
-
-      return true
-    })
-
-    if (files.length > 0) {
-      addFilesToStaging(files)
-    }
-
-    // Clear the input
-    e.target.value = ""
-  }, [])
-
-  const removeStagedFile = (fileId: string) => {
-    setStagedFiles((prev) => prev.filter((file) => file.id !== fileId))
-  }
-
-  const clearAllStaged = () => {
-    setStagedFiles([])
-  }
-
-  const updateProcessingFile = (fileId: string, updates: Partial<ProcessingFile>) => {
+  const updateFileProgress = (fileId: string, updates: Partial<ProcessingFile>) => {
     setProcessingFiles((prev) => prev.map((file) => (file.id === fileId ? { ...file, ...updates } : file)))
   }
 
-  const processAllFiles = async () => {
-    if (stagedFiles.length === 0) return
+  const processFile = async (file: File) => {
+    const fileId = `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    setIsProcessing(true)
+    // Validate file
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "text/plain",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]
 
-    // Move staged files to processing
-    const filesToProcess: ProcessingFile[] = stagedFiles.map((staged) => ({
-      ...staged,
+    if (file.size > maxSize) {
+      console.error(`File ${file.name} is too large (${file.size} bytes, max ${maxSize})`)
+      return
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      console.error(`File ${file.name} has unsupported type: ${file.type}`)
+      return
+    }
+
+    // Add to processing files immediately
+    const processingFile: ProcessingFile = {
+      id: fileId,
+      name: file.name,
       progress: 0,
-      status: "waiting" as const,
-    }))
+      status: "uploading",
+    }
 
-    setProcessingFiles(filesToProcess)
-    setStagedFiles([]) // Clear staged files
+    setProcessingFiles((prev) => [...prev, processingFile])
+    console.log(`Starting upload process for: ${file.name}`)
 
-    // Process each file
-    for (const file of filesToProcess) {
-      try {
-        updateProcessingFile(file.id, { status: "processing", progress: 10 })
+    try {
+      // Start processing immediately - no waiting
+      updateFileProgress(fileId, { status: "uploading", progress: 10 })
 
-        const ocrResult = await EnhancedOCRService.processDocument(
-          file.file,
-          "eng", // Default language
-          (progress) => {
-            updateProcessingFile(file.id, { progress: 10 + progress * 0.8 }) // 10% + 80% for OCR
-          },
-        )
+      // Small delay to show upload status
+      await new Promise((resolve) => setTimeout(resolve, 200))
 
-        updateProcessingFile(file.id, {
-          progress: 90,
-          ocrResult,
-        })
+      // Start OCR processing
+      updateFileProgress(fileId, { status: "processing", progress: 20 })
+      console.log(`Starting OCR processing for: ${file.name}`)
 
-        // Determine document type
-        const getDocumentType = (file: File): Document["type"] => {
-          if (file.type.startsWith("image/")) return "image"
-          if (file.type === "application/pdf") return "pdf"
-          if (file.type.includes("document") || file.name.endsWith(".doc") || file.name.endsWith(".docx")) return "doc"
-          return "text"
-        }
+      const ocrResult = await EnhancedOCRService.processDocument(
+        file,
+        "eng", // Default language
+        (progress) => {
+          const adjustedProgress = 20 + progress * 0.7 // 20% + 70% for OCR
+          updateFileProgress(fileId, { progress: adjustedProgress })
+        },
+      )
 
-        // Create document object
-        const newDocument = {
-          name: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
-          originalName: file.name,
-          type: getDocumentType(file.file),
-          size: file.size,
-          content: file.ocrResult?.text.substring(0, 500),
-          ocrText: file.ocrResult?.text,
-          tags: file.ocrResult?.suggestedTags || [],
-          folderId: selectedFolderId || "root",
-          isProcessing: false,
-          processingProgress: 100,
-          url: URL.createObjectURL(file.file),
-          language: file.ocrResult?.language || "eng",
-        }
+      updateFileProgress(fileId, { progress: 95, status: "processing" })
+      console.log(`OCR completed for: ${file.name}`, ocrResult)
 
-        // Add to document store
-        const addedDocument = DocumentStore.addDocument(newDocument)
-
-        updateProcessingFile(file.id, {
-          progress: 100,
-          status: "completed",
-        })
-
-        // Call completion callback
-        if (onUploadComplete) {
-          onUploadComplete(addedDocument)
-        }
-
-        console.log("Document processed and added:", addedDocument)
-      } catch (error) {
-        console.error("Error processing file:", error)
-        updateProcessingFile(file.id, {
-          status: "error",
-          progress: 0,
-          error: error instanceof Error ? error.message : "Unknown error occurred",
-        })
+      // Determine document type
+      const getDocumentType = (file: File): Document["type"] => {
+        if (file.type.startsWith("image/")) return "image"
+        if (file.type === "application/pdf") return "pdf"
+        if (file.type.includes("document") || file.name.endsWith(".doc") || file.name.endsWith(".docx")) return "doc"
+        return "text"
       }
+
+      // Generate auto-tags based on content and filename
+      const generateAutoTags = (filename: string, ocrText: string): string[] => {
+        const tags: string[] = []
+        const lowerName = filename.toLowerCase()
+        const lowerText = ocrText.toLowerCase()
+
+        // File type tags
+        if (file.type.startsWith("image/")) tags.push("image")
+        if (file.type === "application/pdf") tags.push("pdf")
+
+        // Content-based tags
+        if (lowerName.includes("invoice") || lowerText.includes("invoice")) tags.push("invoice", "finance")
+        if (lowerName.includes("contract") || lowerText.includes("contract")) tags.push("contract", "legal")
+        if (lowerName.includes("report") || lowerText.includes("report")) tags.push("report")
+        if (lowerName.includes("receipt") || lowerText.includes("receipt")) tags.push("receipt", "finance")
+        if (lowerText.includes("business plan")) tags.push("business", "planning")
+
+        // Always add upload date and uploaded tag
+        tags.push("uploaded", new Date().getFullYear().toString())
+
+        return [...new Set(tags)] // Remove duplicates
+      }
+
+      // Create document object
+      const autoTags = generateAutoTags(file.name, ocrResult.text)
+      const newDocument = {
+        name: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
+        originalName: file.name,
+        type: getDocumentType(file),
+        size: file.size,
+        content: ocrResult.text.substring(0, 500), // Preview
+        ocrText: ocrResult.text,
+        tags: [...autoTags, ...(ocrResult.suggestedTags || [])],
+        folderId: selectedFolderId || null,
+        isProcessing: false,
+        processingProgress: 100,
+        url: URL.createObjectURL(file),
+        language: ocrResult.language || "eng",
+      }
+
+      console.log("Creating document:", newDocument)
+
+      // Add to document store
+      const addedDocument = DocumentStore.addDocument(newDocument)
+      console.log("Document added to store:", addedDocument.id)
+
+      // Mark as completed
+      updateFileProgress(fileId, { status: "completed", progress: 100 })
+
+      // Call completion callback
+      if (onUploadComplete) {
+        onUploadComplete(addedDocument)
+      }
+
+      console.log(`Upload completed successfully for: ${file.name}`)
+    } catch (error) {
+      console.error("Error processing file:", error)
+      updateFileProgress(fileId, {
+        status: "error",
+        progress: 0,
+        error: error instanceof Error ? error.message : "Processing failed",
+      })
     }
-
-    setIsProcessing(false)
-
-    // Clear processing files after 3 seconds
-    setTimeout(() => {
-      setProcessingFiles([])
-    }, 3000)
   }
 
-  const getFileIcon = (type: string) => {
-    if (type.startsWith("image/")) {
-      return <ImageIcon className="w-5 h-5 text-green-600" />
-    } else if (type === "application/pdf") {
-      return <FileText className="w-5 h-5 text-red-600" />
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+
+      const files = Array.from(e.dataTransfer.files)
+      console.log(`Dropped ${files.length} files, starting immediate processing`)
+
+      // Process all files immediately
+      files.forEach(processFile)
+    },
+    [selectedFolderId],
+  )
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || [])
+      console.log(`Selected ${files.length} files, starting immediate processing`)
+
+      // Process all files immediately
+      files.forEach(processFile)
+
+      // Clear input
+      e.target.value = ""
+    },
+    [selectedFolderId],
+  )
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split(".").pop()?.toLowerCase()
+    if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(extension || "")) {
+      return <ImageIcon className="w-4 h-4 text-green-600" />
+    } else if (extension === "pdf") {
+      return <FileText className="w-4 h-4 text-red-600" />
     } else {
-      return <File className="w-5 h-5 text-blue-600" />
+      return <File className="w-4 h-4 text-blue-600" />
     }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
   const getStatusIcon = (status: ProcessingFile["status"]) => {
@@ -259,19 +238,17 @@ export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentU
         return <CheckCircle className="w-4 h-4 text-green-600" />
       case "error":
         return <AlertCircle className="w-4 h-4 text-red-600" />
-      case "processing":
-        return <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
       default:
-        return <div className="w-4 h-4 border-2 border-gray-300 rounded-full" />
+        return null
     }
   }
 
   const getStatusColor = (status: ProcessingFile["status"]) => {
     switch (status) {
-      case "waiting":
-        return "bg-gray-500"
-      case "processing":
+      case "uploading":
         return "bg-blue-500"
+      case "processing":
+        return "bg-yellow-500"
       case "completed":
         return "bg-green-500"
       case "error":
@@ -281,8 +258,32 @@ export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentU
     }
   }
 
+  const getStatusText = (status: ProcessingFile["status"]) => {
+    switch (status) {
+      case "uploading":
+        return "Uploading..."
+      case "processing":
+        return "Processing OCR..."
+      case "completed":
+        return "Completed!"
+      case "error":
+        return "Failed"
+      default:
+        return "Unknown"
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Close button */}
+      {onClose && (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Upload Area */}
       <Card
         className={`border-2 border-dashed transition-all duration-200 ${
@@ -297,10 +298,10 @@ export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentU
             <Upload className={`w-8 h-8 transition-colors ${isDragging ? "text-blue-600" : "text-gray-400"}`} />
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {isDragging ? "Drop files here" : "Upload Documents"}
+            {isDragging ? "Drop files here!" : "Upload Documents"}
           </h3>
           <p className="text-sm text-gray-500 mb-6 text-center max-w-sm">
-            Drag and drop files here, or click to browse. Files will be staged for review before processing.
+            Files will be processed automatically with OCR. Supports PDF, images, and documents up to 10MB.
           </p>
           <input
             type="file"
@@ -308,93 +309,43 @@ export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentU
             accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.doc,.docx"
             onChange={handleFileSelect}
             className="hidden"
-            id="file-upload"
+            id="file-upload-auto"
           />
           <Button asChild size="lg" className="min-w-[140px]">
-            <label htmlFor="file-upload" className="cursor-pointer">
+            <label htmlFor="file-upload-auto" className="cursor-pointer">
               Choose Files
             </label>
           </Button>
-          <p className="text-xs text-gray-400 mt-3">Supported: PDF, Images, DOC, DOCX, TXT • Max: 10MB per file</p>
+          <p className="text-xs text-gray-400 mt-3">Processing starts immediately - no waiting required!</p>
         </CardContent>
       </Card>
 
-      {/* Staged Files */}
-      {stagedFiles.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="w-5 h-5" />
-                Staged Files ({stagedFiles.length})
-              </CardTitle>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={clearAllStaged}>
-                  Clear All
-                </Button>
-                <Button onClick={processAllFiles} disabled={isProcessing} className="bg-green-600 hover:bg-green-700">
-                  <Play className="w-4 h-4 mr-2" />
-                  Proceed with Upload
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="max-h-60">
-              <div className="space-y-3">
-                {stagedFiles.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {getFileIcon(file.type)}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{file.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {file.type.split("/")[1].toUpperCase()} • {formatFileSize(file.size)}
-                        </p>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeStagedFile(file.id)}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Ready to process:</strong> {stagedFiles.length} file(s) will be processed with OCR and added to
-                your document library. Click "Proceed with Upload" to start.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Processing Files */}
+      {/* Processing Status */}
       {processingFiles.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {isProcessing ? (
-                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <CheckCircle className="w-5 h-5 text-green-600" />
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900 flex items-center">
+                <Upload className="w-5 h-5 mr-2" />
+                Processing Files ({processingFiles.length})
+              </h3>
+              {processingFiles.every((f) => f.status === "completed") && (
+                <Badge variant="default" className="bg-green-100 text-green-800">
+                  All Complete!
+                </Badge>
               )}
-              {isProcessing ? "Processing Files" : "Processing Complete"} ({processingFiles.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </div>
             <div className="space-y-4">
               {processingFiles.map((file) => (
                 <div key={file.id} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      {getFileIcon(file.type)}
+                      {getFileIcon(file.name)}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
                         <div className="flex items-center space-x-2">
                           <Badge variant="secondary" className={`text-xs text-white ${getStatusColor(file.status)}`}>
-                            {file.status}
+                            {getStatusText(file.status)}
                           </Badge>
                           {file.error && <span className="text-xs text-red-600">{file.error}</span>}
                         </div>
@@ -405,23 +356,19 @@ export function DocumentUpload({ onUploadComplete, selectedFolderId }: DocumentU
                       {getStatusIcon(file.status)}
                     </div>
                   </div>
-                  <Progress
-                    value={file.progress}
-                    className={`h-2 ${file.status === "error" ? "[&>div]:bg-red-500" : ""}`}
-                  />
-                  {file.ocrResult && file.status === "completed" && (
-                    <div className="mt-2 p-2 bg-green-50 rounded text-xs">
-                      <p className="text-green-800">
-                        <strong>OCR Complete:</strong> Extracted {file.ocrResult.text.length} characters
-                        {file.ocrResult.suggestedTags.length > 0 && (
-                          <span> • Tags: {file.ocrResult.suggestedTags.join(", ")}</span>
-                        )}
-                      </p>
-                    </div>
-                  )}
+                  <Progress value={file.progress} className={`h-2 ${file.status === "error" ? "bg-red-100" : ""}`} />
                 </div>
               ))}
             </div>
+
+            {processingFiles.every((f) => f.status === "completed" || f.status === "error") && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800 text-center">
+                  ✅ Upload complete! Your documents are now available in the library.
+                  {onClose && " This dialog will close automatically."}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

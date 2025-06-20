@@ -17,37 +17,48 @@ import {
   Languages,
   Search,
   Eye,
+  MoreHorizontal,
   Activity,
   Database,
   Zap,
-  Plus,
+  RefreshCw,
 } from "lucide-react"
 import type { AppState, Document } from "../../types"
-import { DatabaseService } from "../../services/database-service"
+import { DocumentStore } from "../../store/document-store"
 
 interface DashboardProps {
   state: AppState
   updateState: (updates: Partial<AppState>) => void
 }
 
-export function Dashboard({ state, updateState }: DashboardProps) {
-  const [storageUsage, setStorageUsage] = useState({ used: 0, quota: 0 })
+export function EnhancedDashboard({ state, updateState }: DashboardProps) {
+  const [storageUsage, setStorageUsage] = useState({ used: 0, quota: 100 * 1024 * 1024 }) // 100MB quota
   const [recentActivity, setRecentActivity] = useState<Document[]>([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
+  // Subscribe to store changes and update recent activity
   useEffect(() => {
-    // Load storage usage
-    DatabaseService.getStorageUsage().then(setStorageUsage).catch(console.error)
+    const updateRecentActivity = () => {
+      const recent = [...state.documents].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 5)
+      setRecentActivity(recent)
 
-    // Get recent documents (last 7 days)
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      // Calculate storage usage
+      const totalSize = state.documents.reduce((acc, doc) => acc + doc.size, 0)
+      setStorageUsage((prev) => ({ ...prev, used: totalSize }))
 
-    const recent = [...state.documents]
-      .filter((doc) => doc.createdAt >= sevenDaysAgo)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 8)
+      console.log("Dashboard: Updated recent activity", recent.length, "documents")
+    }
 
-    setRecentActivity(recent)
+    // Initial load
+    updateRecentActivity()
+
+    // Subscribe to store changes
+    const unsubscribe = DocumentStore.subscribe((newState) => {
+      console.log("Dashboard: Store updated, refreshing data")
+      updateRecentActivity()
+    })
+
+    return unsubscribe
   }, [state.documents])
 
   const totalDocuments = state.documents.length
@@ -74,6 +85,13 @@ export function Dashboard({ state, updateState }: DashboardProps) {
       default:
         return <FileText className="h-4 w-4 text-blue-500" />
     }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    // Simulate refresh
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setIsRefreshing(false)
   }
 
   const quickActions = [
@@ -117,20 +135,18 @@ export function Dashboard({ state, updateState }: DashboardProps) {
             <p className="text-lg text-gray-600">Welcome back! Here's your document overview.</p>
           </div>
           <div className="flex items-center space-x-3">
-            {processingDocuments > 0 && (
-              <Badge variant="secondary" className="px-3 py-1">
-                <Activity className="h-3 w-3 mr-1" />
-                {processingDocuments} Processing
-              </Badge>
-            )}
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Badge variant="secondary" className="px-3 py-1">
+              <Activity className="h-3 w-3 mr-1" />
+              {processingDocuments} Processing
+            </Badge>
             <Badge variant="outline" className="px-3 py-1">
               <Database className="h-3 w-3 mr-1" />
               {state.settings?.storageLocation || "browser"}
             </Badge>
-            <Button onClick={() => updateState({ currentView: "documents" })} className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Upload Documents
-            </Button>
           </div>
         </div>
 
@@ -143,7 +159,8 @@ export function Dashboard({ state, updateState }: DashboardProps) {
                   <p className="text-sm font-medium text-gray-600">Total Documents</p>
                   <p className="text-3xl font-bold text-gray-900">{totalDocuments}</p>
                   <p className="text-sm text-green-600 mt-1">
-                    <TrendingUp className="h-3 w-3 inline mr-1" />+{recentActivity.length} this week
+                    <TrendingUp className="h-3 w-3 inline mr-1" />
+                    Recently uploaded
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -265,27 +282,22 @@ export function Dashboard({ state, updateState }: DashboardProps) {
           {/* Recent Activity */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center">
                   <Clock className="h-5 w-5 mr-2" />
-                  Recent Uploads
-                </CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => updateState({ currentView: "documents" })}>
-                  View All
-                </Button>
-              </div>
+                  Recent Activity
+                </div>
+                <Badge variant="secondary">{recentActivity.length}</Badge>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {recentActivity.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="font-medium">No recent uploads</p>
+                    <p>No recent activity</p>
                     <p className="text-sm">Upload some documents to get started</p>
-                    <Button
-                      className="mt-4 bg-blue-600 hover:bg-blue-700"
-                      onClick={() => updateState({ currentView: "documents" })}
-                    >
+                    <Button className="mt-4" onClick={() => updateState({ currentView: "documents" })}>
                       <Upload className="h-4 w-4 mr-2" />
                       Upload Documents
                     </Button>
@@ -301,13 +313,11 @@ export function Dashboard({ state, updateState }: DashboardProps) {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-gray-900 truncate">{doc.name}</p>
                         <p className="text-sm text-gray-500">
-                          {doc.createdAt.toLocaleDateString()} • {doc.tags.slice(0, 2).join(", ")}
+                          {doc.updatedAt.toLocaleDateString()} • {formatBytes(doc.size)}
+                          {doc.tags.length > 0 && ` • ${doc.tags.slice(0, 2).join(", ")}`}
                         </p>
                       </div>
                       <div className="flex items-center space-x-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {doc.type.toUpperCase()}
-                        </Badge>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -317,6 +327,9 @@ export function Dashboard({ state, updateState }: DashboardProps) {
                           }}
                         >
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost">
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -358,9 +371,7 @@ export function Dashboard({ state, updateState }: DashboardProps) {
                 </Button>
               ))}
               {state.tags.length === 0 && (
-                <p className="text-sm text-gray-500 py-4">
-                  No tags yet. Upload documents to automatically generate tags.
-                </p>
+                <p className="text-sm text-gray-500">No tags yet. Upload documents to create tags automatically.</p>
               )}
             </div>
           </CardContent>
